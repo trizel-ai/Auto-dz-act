@@ -1,17 +1,10 @@
 # 🧪 STOE V12 Validation Summary
-
 ## ✅ Overview
-
 This document provides a scientific summary of the successful validation of the STOE V12 framework using independent datasets and image-based experimental outputs.
-
 ---
-
 ## 🌌 Planck CMB Validation
-
 STOE V12 was validated using Planck CMB spectral data.  
 **Zenodo DOI:** [15616047](https://zenodo.org/records/15616047)
-
----
 
 ## 🔬 Experimental Success Matrix
 
