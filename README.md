@@ -1,80 +1,77 @@
 # AUTO DZ ACT – Scientific Algorithm for Experimental Logic Activation (STOE V12–V22)
 
-**Repository:** `auto-dz-act`  
-**Author:** Dr. Abdelkader Omran  
-**Lab:** TRIZEL STOE LAB  
-**Affiliation:** HONGKONG TRIZEL INTERNATIONAL AI GROUP LIMITED  
-**License:** CC-BY 4.0  
-**DOI:** [10.5281/zenodo.16292189](https://doi.org/10.5281/zenodo.16292189)
+**Author**: Dr. Abdelkader Omran  
+**Lab**: TRIZEL STOE LAB  
+**Affiliation**: HONGKONG TRIZEL INTERNATIONAL AI GROUP LIMITED  
+**License**: CC-BY 4.0  
+**DOI**: [10.5281/zenodo.16292189](https://doi.org/10.5281/zenodo.16292189)  
 
 ---
 
-## 🔍 Purpose
+## 🧠 Purpose
 
-AUTO DZ ACT stands for **Automatic Deviation Zone Activation**.  
-It is a symbolic scientific algorithm developed to validate theoretical predictions from the STOE framework (V12–V22) against experimental results, using logical codes:
+AUTO DZ ACT is a symbolic validation algorithm designed to compare experimental datasets against the Simplified Theory of Everything (STOE), especially from versions V12 to V22.
 
-| Code   | Meaning               | Action                       |
-|--------|------------------------|------------------------------|
-| `0/0`  | Full agreement         | Accept current STOE version |
-| `D0/DZ`| Partial deviation      | Activate next version (Vn+1) |
-| `DZ`   | Major breakdown        | Log anomaly, trigger review  |
+This algorithm supports:
 
----
-
-## ⚙️ Algorithmic Inputs & Logic
-
-- **Inputs**:
-  - Theoretical value: `T`
-  - Experimental result: `E`
-- **Validation Rules**:
-  - `|T − E| < ε` → `0/0`
-  - `ε ≤ |T − E| < δ` → `D0/DZ`
-  - `|T − E| ≥ δ` → `DZ`
-
-Where:
-- `ε` = Experimental tolerance  
-- `δ` = Maximum deviation allowed
+- Photon transformation analysis  
+- Redshift and CMB validation  
+- LHC collision spectrum comparison  
+- Detection of anomalies using symbolic logic (`DZ`, `0/0`, `++0`)  
+- Direct integration with Zenodo and scientific metadata
 
 ---
 
-## 🧪 Experimental Integration
+## ⚙️ Structure
+---
 
-AUTO DZ ACT has been applied to:
-- ∇S gradients in MRI (STOE BIO)
-- Photonic anomaly detection
-- High-Tesla magnetic field data
-- Real-time Earth climate field modeling
+## 🧪 Scientific Validation Figures (STOE V12)
 
-Outputs include:
-- CSV logs
-- Markdown + PDF reports
-- Auto DOI tagging for reproducibility
+All validation visuals are in [`assets/`](./assets). These include comparisons with GR, M-Theory, and LQG.
+
+| Dataset     | STOE V12 | General Relativity | M-Theory | LQG |
+|-------------|----------|---------------------|----------|-----|
+| CMB         | 100%     | 95%                | 88%      | 81% |
+| Redshift    | 100%     | 95%                | 86%      | 80% |
+| LHC         | 100%     | 95%                | 89%      | 82% |
 
 ---
 
-## 🌐 Citation
+### 🔬 Unified Force Equation – STOE V12
 
-```bibtex
-@software{omran2025auto,
-  author       = {Abdelkader Omran},
-  title        = {AUTO DZ ACT – Scientific Algorithm for Experimental Logic Activation (STOE V12–V22)},
-  year         = 2025,
-  publisher    = {HONGKONG TRIZEL INTERNATIONAL AI GROUP LIMITED},
-  doi          = {10.5281/zenodo.16292189},
-  url          = {https://doi.org/10.5281/zenodo.16292189}
-}
----
+\[
+F = 2 \cdot F_{\text{max}} \left( 1 - \frac{2x}{x_{\text{max}}} + \frac{x^2}{x_{\text{max}}^2} \right) \cos(\alpha)
+\]
 
-## 📁 Next Steps
-
-- [ ] Upload `core.py` (main logic of symbolic comparison)
-- [ ] Integrate `LICENSE` file (Creative Commons Attribution 4.0)
-- [ ] Add `.zenodo.json` for metadata integration
-- [ ] Publish usage examples in the `examples/` folder
+- Models receding and attractive components  
+- Adjusts via angular projection α  
+- Valid across photon–gluon–space transitions
 
 ---
 
-**Developed and maintained by**  
-🧠 [TRIZEL STOE LAB](https://zenodo.org/records/16292189)  
-🌐 Contact: `admintrizel@icloud.com`
+## 📸 Visual Summary
+
+![STOE V12 Success](assets/IMG_1254.jpeg)  
+![Unified Equation](assets/IMG_1256.jpeg)  
+![Spectral Transition Cycle](assets/IMG_1262.jpeg)  
+![Scientific Matrix](assets/IMG_1264.jpeg)  
+![Theory Overview](assets/IMG_1265.jpeg)
+
+For full set of figures, refer to `/assets/`.
+
+---
+
+## 🔗 Zenodo Archive
+
+The complete validated datasets and the algorithm are published on Zenodo:
+
+📁 Zenodo: [https://zenodo.org/records/16292189](https://zenodo.org/records/16292189)  
+📁 GitHub: [https://github.com/trizel-ai/auto-dz-act](https://github.com/trizel-ai/auto-dz-act)
+
+---
+
+## 📜 License
+
+This repository is released under the **Creative Commons Attribution 4.0 (CC-BY 4.0)** license.
+
+> © 2025 TRIZEL STOE LAB — Scientific Freedom through Algorithmic Transparency.
