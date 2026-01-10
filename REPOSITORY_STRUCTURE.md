@@ -28,6 +28,11 @@ Contains formal policies and reference materials:
 Contains extended documentation:
 - **MATHEMATICAL_LOGIC.md** — Mathematical and symbolic logic documentation
 
+### assets/
+Contains official visual assets:
+- **badges/** — SVG badges (full and compact versions)
+- **README.md** — Assets usage guide
+
 ---
 
 ## Content policy
