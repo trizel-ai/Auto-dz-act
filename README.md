@@ -27,6 +27,7 @@ It performs **no execution**, **no data ingestion**, and **no scientific interpr
 - [SCOPE_AND_NONDISCLOSURE.md](SCOPE_AND_NONDISCLOSURE.md)
 - [HISTORICAL_PROVENANCE.md](HISTORICAL_PROVENANCE.md)
 - [PUBLICATIONS.md](PUBLICATIONS.md)
+- [MULTILINGUAL_POLICY.md](MULTILINGUAL_POLICY.md)
 
 ---
 

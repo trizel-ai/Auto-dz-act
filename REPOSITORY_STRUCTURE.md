@@ -12,6 +12,7 @@ This repository is organized as a **definition-only** reference for AUTO DZ ACT.
 - **SCOPE_AND_NONDISCLOSURE.md** — Scope boundaries and neutrality mandate
 - **HISTORICAL_PROVENANCE.md** — Provenance and historical record
 - **PUBLICATIONS.md** — Citations and archival references
+- **MULTILINGUAL_POLICY.md** — Multilingual availability and platform coupling requirements
 - **REPOSITORY_STRUCTURE.md** — This file
 
 ---
