@@ -32,7 +32,7 @@ To verify organization-level GitHub Apps authorization:
 **Evidence**:
 - Successful Zenodo publication exists (DOI: 10.5281/zenodo.16521756)
 - Repository has published releases to Zenodo
-- No 403 or authorization errors reported
+- Integration is functionally operational (as evidenced by existing DOI)
 
 **Zenodo Authorization Status**:
 - ✅ **Authorized**: YES
@@ -161,7 +161,8 @@ To verify repository-specific authorization:
 - ❌ **Affected by organization restrictions**: NO
 
 **Published Releases**:
-- v1.0.0 → Zenodo DOI: 10.5281/zenodo.16521756
+- Primary reference archived on Zenodo: DOI 10.5281/zenodo.16521756
+- Additional archives: 10.5281/zenodo.16522543, 10.5281/zenodo.17968772
 - Status: ✅ Successfully published and archived
 
 **Repository Visibility**:
@@ -203,7 +204,7 @@ Zenodo integration with GitHub operates through:
 3. **Release Publication Mechanism**:
    - **Manual method**: Create GitHub release → Manually preserve on Zenodo
    - **Automatic method** (if enabled): GitHub release webhook → Zenodo auto-harvest
-   - **Current method**: Manual curation (per PUBLICATIONS.md policy)
+   - **Current method**: Manual curation (per PUBLICATIONS.md "No Auto-Publication" policy)
 
 ### Current Configuration: ✅ STANDARD INTEGRATION
 
@@ -509,5 +510,5 @@ git remote -v
 **END OF VERIFICATION REPORT**
 
 **Last Updated**: 2026-01-11  
-**Next Review**: 2026-04-11 (Quarterly)  
+**Next Review**: Q2 2026 (Quarterly review cycle)  
 **Status**: ✅ OPERATIONAL — NO ACTIONS REQUIRED
