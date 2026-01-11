@@ -13,6 +13,7 @@ This repository is organized as a **definition-only** reference for AUTO DZ ACT.
 - **HISTORICAL_PROVENANCE.md** — Provenance and historical record
 - **PUBLICATIONS.md** — Citations and archival references
 - **MULTILINGUAL_POLICY.md** — Multilingual availability and platform coupling requirements
+- **GOVERNANCE.md** — Branch protection and governance requirements
 - **REPOSITORY_STRUCTURE.md** — This file
 
 ---
@@ -21,17 +22,19 @@ This repository is organized as a **definition-only** reference for AUTO DZ ACT.
 
 ### reference/
 Contains formal policies and reference materials:
-- **REFERENCE_REQUESTS.md** — Formal authorization policy
+- **README.md** — Directory purpose and scope
+- **REFERENCE_REQUESTS.md** — Formal authorization and request intake policy
 - **GLOSSARY.md** — Terminology and definitions
 
 ### docs/
 Contains extended documentation:
+- **README.md** — Directory purpose and scope
 - **MATHEMATICAL_LOGIC.md** — Mathematical and symbolic logic documentation
 
 ### assets/
 Contains official visual assets:
-- **badges/** — SVG badges (full and compact versions)
 - **README.md** — Assets usage guide
+- **badges/** — SVG badges (full and compact versions)
 
 ---
 

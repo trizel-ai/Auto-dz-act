@@ -23,10 +23,20 @@ All execution-level uses occur outside this repository.
 
 ## Definition
 
-AUTO DZ ACT (Automated Detection of Zero-states and Anomalous Condition Transitions)
-is an **experimental scientific algorithm** designed to perform
+**AUTO DZ ACT**  
+**Automated Detection of Zero-states and Anomalous Condition Transitions**
+
+AUTO DZ ACT is an **experimental scientific algorithm** designed to perform
 **epistemic state validation** of observational claims
 through symbolic and logical comparison against declared theoretical baselines.
+
+### Canonical Expansion
+
+- **AUTO** — Automated: procedure-driven, reproducible validation workflow
+- **DZ** — Detection of Zero-states: explicit labeling of insufficient or zero-evidence conditions
+- **ACT** — Anomalous Condition Transitions: tracked changes between epistemic states over time
+
+**Methodological disclaimer**: This designation is methodological and does not assert or imply any physical theory.
 
 AUTO DZ ACT is **theory-agnostic** by design.
 
