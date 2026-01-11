@@ -482,10 +482,10 @@ When a GitHub ↔ Zenodo integration is disconnected and reconnected:
 4. Result: 403 Forbidden when attempting to enable the repository
 
 **Why Only This Repository?**
-- Repository may have been in a specific state during disconnect
-- Cached permissions for this repo specifically became stale
+- Repository may have been in a specific state during disconnect (e.g., actively processing a webhook, mid-release harvest, or pending DOI generation)
+- Cached permissions for this repo specifically became stale (stored installation ID or repository ID no longer valid)
 - Other repos may have been toggled OFF before disconnect, clearing their cache
-- This repo may have had active webhooks or pending operations during reset
+- This repo may have had active webhooks or pending operations during reset (release being harvested, metadata being updated)
 
 ### Resolution Steps
 
@@ -544,8 +544,8 @@ When a GitHub ↔ Zenodo integration is disconnected and reconnected:
 **Action**: If Steps 1-3 don't resolve, manually re-register the repository
 
 1. **On Zenodo**, ensure repository is toggled OFF
-2. **Wait 5 minutes** (allows cache to expire)
-3. **Clear browser cache** (to avoid client-side cached state)
+2. **Wait 3-5 minutes** (allows Zenodo's server-side cache to expire; typical cache TTL is 5 minutes or less)
+3. **Clear browser cache** (to avoid client-side cached state that might show stale UI)
 4. **On Zenodo**, click **Sync now** again
 5. **Toggle ON** the repository
 6. **If still 403**: Proceed to Step 5
@@ -586,13 +586,18 @@ When a GitHub ↔ Zenodo integration is disconnected and reconnected:
 
 **Verification**:
 ```bash
-# On GitHub, create a test release
-gh release create test-v0.0.1 --title "Test Release" --notes "Integration test" --repo trizel-ai/Auto-dz-act
+# On GitHub, create a test release with timestamp to avoid conflicts
+gh release create test-integration-$(date +%s) --title "Integration Test" --notes "Zenodo integration verification test" --repo trizel-ai/Auto-dz-act
 
 # Check if Zenodo harvests it (may take 1-2 minutes)
 # Visit: https://zenodo.org/account/settings/github/
-# Verify test-v0.0.1 appears under the repository
+# Verify the test release appears under the repository
+
+# After successful verification, delete the test release to avoid clutter
+gh release delete test-integration-<timestamp> --yes --repo trizel-ai/Auto-dz-act
 ```
+
+**Note**: Test releases create permanent tags. Delete test releases after verification to keep the repository clean.
 
 ### Alternative: Manual Upload Workaround
 
