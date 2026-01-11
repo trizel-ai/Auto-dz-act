@@ -2,9 +2,30 @@
 
 ---
 
+## Zenodo Archival Policy
+
+### Repository Roles
+
+- **GitHub repository** (`trizel-ai/Auto-dz-act`): Living, authoritative definition source
+- **Zenodo deposits**: Intentional, versioned, archival snapshots for permanent citation
+
+### Publication Policy
+
+- Zenodo releases are **curated and versioned**, not automatic
+- Each Zenodo deposit represents a stable, reviewed reference snapshot
+- GitHub remains the primary source for latest definitions and updates
+- All Zenodo deposits must reference this GitHub repository
+
+### No Auto-Publication
+
+**Important**: This repository does **not** automatically publish every GitHub change to Zenodo.  
+Zenodo releases are intentional milestones only.
+
+---
+
 ## Definition-only archival snapshot
 
-**Status**: Prepared for Zenodo archival  
+**Tag**: v1.0.0  
 **Purpose**: Permanent scientific reference snapshot of the algorithm definition  
 **Scope**: Methodology documentation only — no execution code, no data, no physical interpretation
 
