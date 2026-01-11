@@ -2,6 +2,16 @@
 
 ---
 
+## Definition-only archival snapshot
+
+**Status**: Prepared for Zenodo archival  
+**Purpose**: Permanent scientific reference snapshot of the algorithm definition  
+**Scope**: Methodology documentation only — no execution code, no data, no physical interpretation
+
+*Zenodo DOI will be added here upon release*
+
+---
+
 ## Primary reference
 
 - Omran, A. (2024). AUTO DZ ACT: Symbolic validation algorithm for experimental logic.

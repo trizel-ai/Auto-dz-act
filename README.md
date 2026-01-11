@@ -1,3 +1,5 @@
+![AUTO DZ ACT Badge](assets/badges/auto-dz-act-badge.svg)
+
 # AUTO DZ ACT
 
 ⚠️ **Definition-only repository**  
@@ -21,6 +23,24 @@ It performs **no execution**, **no data ingestion**, and **no scientific interpr
 
 ---
 
+## Official Reference
+
+This GitHub repository is the authoritative public reference for the AUTO DZ ACT algorithm.
+
+Official website: https://trizel-ai.com/
+
+This repository must be treated as the public scientific reference linked from the website.
+
+---
+
+## 🌐 Multilingual availability
+
+This repository follows a multilingual documentation policy.  
+English is the canonical reference language.  
+See [MULTILINGUAL_POLICY.md](MULTILINGUAL_POLICY.md) for details.
+
+---
+
 ## Mandatory reading
 
 - [DEFINITION.md](DEFINITION.md)
@@ -28,6 +48,7 @@ It performs **no execution**, **no data ingestion**, and **no scientific interpr
 - [HISTORICAL_PROVENANCE.md](HISTORICAL_PROVENANCE.md)
 - [PUBLICATIONS.md](PUBLICATIONS.md)
 - [MULTILINGUAL_POLICY.md](MULTILINGUAL_POLICY.md)
+- [GOVERNANCE.md](GOVERNANCE.md)
 
 ---
 

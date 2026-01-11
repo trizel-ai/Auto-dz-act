@@ -2,6 +2,26 @@
 
 ---
 
+## Canonical Language Policy
+
+**English is the canonical reference language** for all AUTO DZ ACT documentation.
+
+All other languages (Arabic, French, etc.) are **faithful translations only**, not reinterpretations.
+
+### Translation Constraints
+
+No translation may introduce:
+- New claims
+- New theoretical interpretations
+- Renamed concepts
+- Additional context beyond the original
+
+### Conflict Resolution
+
+**In case of conflict between language versions, English prevails.**
+
+---
+
 ## Status
 
 This document establishes the **multilingual publication policy** and **reference coupling requirements** for AUTO DZ ACT documentation.
