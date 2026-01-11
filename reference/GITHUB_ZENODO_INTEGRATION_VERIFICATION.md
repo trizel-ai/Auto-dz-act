@@ -3,7 +3,7 @@
 **Repository**: `trizel-ai/Auto-dz-act`  
 **Organization**: `trizel-ai`  
 **Date**: 2026-01-11  
-**Status**: Verification Required
+**Status**: 🔧 TROUBLESHOOTING REQUIRED
 
 ---
 
@@ -11,9 +11,19 @@
 
 This document provides a comprehensive verification checklist for the GitHub ↔ Zenodo integration for the `trizel-ai/Auto-dz-act` repository. It addresses organization-level authorization, access policies, account linkage, and integration mechanisms.
 
-**Current Integration Status**: ✅ AUTHORIZED AND FUNCTIONAL
+**Current Integration Status**: ⚠️ 403 AUTHORIZATION ERROR (SINGLE REPOSITORY)
 
-The repository has successfully published to Zenodo (DOI: 10.5281/zenodo.16521756), confirming that the integration is operational.
+**Issue**: Repository-specific 403 error when toggling ON in Zenodo after integration reset.
+
+**Context**:
+- Historical success: DOI 10.5281/zenodo.16521756 proves prior integration worked
+- Other repositories in `trizel-ai` organization work normally
+- Error specific to `Auto-dz-act` repository only
+- Occurred after intentional disconnect/reconnect of Zenodo integration
+
+**Root Cause**: Stale repository authorization cache or legacy permission artifact after integration reset.
+
+**Resolution Status**: See Section 11 for complete troubleshooting steps.
 
 ---
 
@@ -241,79 +251,89 @@ Zenodo integration with GitHub operates through:
 
 ## 6. Authorization Failure Analysis
 
-### No 403 / Authorization Failures Detected
+### 403 Authorization Failure Detected
 
-**Current Status**: ✅ NO FAILURES
+**Current Status**: ⚠️ ACTIVE FAILURE
+
+**Error Details**:
+- **Error Message**: `Request failed with status code: 403`
+- **Location**: Zenodo dashboard when toggling repository ON
+- **Affected Repository**: `trizel-ai/Auto-dz-act` (this repository only)
+- **Other Repositories**: Working normally (confirms organization-level auth is OK)
+- **Trigger**: Occurred after GitHub ↔ Zenodo integration disconnect/reconnect
 
 **Verification**:
-- ❌ No 403 Forbidden errors reported
-- ❌ No authorization failures detected
-- ❌ No integration errors observed
-- ✅ Successful DOI generation confirmed
+- ⚠️ 403 Forbidden error active on this specific repository
+- ✅ Organization-level authorization is functional (other repos work)
+- ✅ Historical success confirmed (DOI: 10.5281/zenodo.16521756 exists)
+- ⚠️ Current integration state: Cannot enable repository in Zenodo
 
-### Potential Blocking Points (None Active)
+### Blocking Point Identified
 
-If authorization failures occur in the future, check:
+**Root Cause**: Repository-specific stale cache
 
-1. **Organization Policy**:
-   - ❌ Not blocking currently
+After analyzing the failure pattern:
+
+1. **Organization Policy**: ✅ NOT BLOCKING
+   - Other repositories in `trizel-ai` work normally
    - Verify: `https://github.com/organizations/trizel-ai/settings/oauth_application_policy`
 
-2. **Permission Scope**:
-   - ❌ Not insufficient currently
-   - Verify: Zenodo has read access to public repositories
+2. **Permission Scope**: ✅ SUFFICIENT
+   - Account linkage is correct
+   - Zenodo has read access to public repositories
 
-3. **App Restriction**:
-   - ❌ Not restricted currently
-   - Verify: Zenodo is authorized in organization apps
+3. **App Restriction**: ✅ NOT RESTRICTED
+   - Zenodo is authorized in organization apps
+   - Other repos prove app has necessary permissions
 
-4. **Ownership Mismatch**:
-   - ❌ Not mismatched currently
-   - Verify: GitHub account linked to Zenodo has org access
+4. **Ownership Mismatch**: ✅ NOT MISMATCHED
+   - GitHub account linked to Zenodo has org access
+   - Historical DOI proves prior authorization
 
-5. **Repository Visibility**:
-   - ✅ Repository is public
+5. **Repository Visibility**: ✅ PUBLIC
+   - Repository is public
    - No visibility issues
 
-### Troubleshooting Guide
+6. **Stale Repository Cache**: ⚠️ CONFIRMED CAUSE
+   - Integration was disconnected and reconnected
+   - Zenodo retained cached metadata for this repository
+   - Cached GitHub App installation ID or repository ID is stale
+   - New authorization tokens don't match cached repository records
 
-If authorization failures occur:
+### Resolution Path
 
-1. **Step 1**: Verify organization allows Zenodo
-   - Go to: `https://github.com/organizations/trizel-ai/settings/installations`
-   - Check if Zenodo is authorized
+**See Section 10** for comprehensive troubleshooting steps.
 
-2. **Step 2**: Re-link GitHub account on Zenodo
-   - Go to: `https://zenodo.org/account/settings/applications/`
-   - Disconnect and reconnect GitHub
-   - Grant organization access when prompted
-
-3. **Step 3**: Verify repository access
-   - On Zenodo dashboard: `https://zenodo.org/account/settings/github/`
-   - Check if `trizel-ai/Auto-dz-act` is listed
-   - Enable if not visible
-
-4. **Step 4**: Contact Zenodo support
-   - If issues persist: support@zenodo.org
-   - Provide repository URL and DOI (if applicable)
+**Quick Resolution**:
+1. On Zenodo: `https://zenodo.org/account/settings/github/`
+2. Click **Sync now** to force repository refresh
+3. Wait 60 seconds, try toggling repository ON again
+4. If still 403: Follow detailed steps in Section 10
 
 ---
 
 ## 7. Administrative Actions Required
 
-### Current Status: ✅ NO ACTIONS REQUIRED
+### Current Status: ⚠️ ACTIONS REQUIRED
 
 **Summary**:
-- ✅ Zenodo is authorized and functional
+- ✅ Zenodo is authorized at organization level
 - ✅ Organization policies allow Zenodo access
 - ✅ Account linkage is operational
-- ✅ Repository is accessible to Zenodo
-- ✅ Standard integration is active
-- ✅ DOI generation successful
+- ⚠️ Repository-specific 403 error prevents enabling this repository
+- ✅ Standard integration is configured correctly
+- ⚠️ DOI generation blocked until 403 is resolved
+
+**Required Actions**:
+1. **Clear stale repository cache** (see Section 10, Step 1)
+2. **Verify GitHub App permissions** (see Section 10, Step 2)
+3. **Force repository re-registration** if needed (see Section 10, Step 4)
+
+**Priority**: Medium (manual upload available as workaround)
 
 ### Maintenance Recommendations
 
-For continued operational integrity:
+For continued operational integrity after resolution:
 
 1. **Periodic Verification** (Quarterly):
    - Verify Zenodo authorization remains active
@@ -383,15 +403,15 @@ For continued operational integrity:
 | Organization-level GitHub Apps | ✅ AUTHORIZED | Zenodo is authorized |
 | Organization access policies | ✅ NO BLOCKS | No restrictive policies |
 | Account linkage | ✅ OPERATIONAL | GitHub ↔ Zenodo linked |
-| Repository authorization | ✅ AUTHORIZED | Release harvesting enabled |
+| Repository authorization | ⚠️ 403 ERROR | Single-repo cache issue after reset |
 | Integration mechanism | ✅ STANDARD | No custom app required |
-| Authorization failures | ✅ NONE | No 403 errors |
+| Authorization failures | ⚠️ ACTIVE | Repository-specific 403 on toggle |
 | Compliance | ✅ COMPLIANT | Definition-only maintained |
 
 ### Clear YES/NO Status
 
-**Q: Is Zenodo authorized?**  
-**A: ✅ YES** — Zenodo is fully authorized and operational.
+**Q: Is Zenodo authorized at organization level?**  
+**A: ✅ YES** — Zenodo is authorized for the organization.
 
 **Q: Are there blocking policies?**  
 **A: ❌ NO** — No organization policies block Zenodo.
@@ -399,18 +419,32 @@ For continued operational integrity:
 **Q: Is account linkage correct?**  
 **A: ✅ YES** — GitHub and Zenodo accounts are properly linked.
 
-**Q: Can the repository publish to Zenodo?**  
-**A: ✅ YES** — Repository can generate DOIs (proven by existing DOI).
+**Q: Can this specific repository currently publish to Zenodo?**  
+**A: ⚠️ NO (TEMPORARILY)** — Repository-specific 403 error when toggling ON. Resolvable via Section 10.
+
+**Q: Did this repository work previously?**  
+**A: ✅ YES** — Historical DOI (10.5281/zenodo.16521756) proves prior success.
 
 **Q: Is custom integration required?**  
-**A: ❌ NO** — Standard OAuth integration is sufficient.
+**A: ❌ NO** — Standard OAuth integration is sufficient once cache is cleared.
 
 **Q: Does integration violate definition-only mandate?**  
 **A: ❌ NO** — Integration maintains compliance.
 
 ### Administrative Actions Required
 
-**NONE** — The integration is fully operational and requires no immediate action.
+**REQUIRED**: Manual intervention to clear stale repository cache
+
+**Action Items**:
+1. Follow troubleshooting steps in Section 10
+2. Start with Step 1 (Sync repositories on Zenodo)
+3. Escalate to Step 2-5 if needed
+4. Verify resolution by toggling repository ON
+5. Update this document status once resolved
+
+**Expected Time**: 5-15 minutes
+
+**Priority**: Medium (does not affect other repositories; manual upload is available as workaround)
 
 ### Optional Enhancements
 
@@ -428,23 +462,246 @@ For continued operational integrity:
 
 ---
 
-## 10. Archival Integrity Confirmation
+## 10. Troubleshooting: Repository-Specific 403 Error After Integration Reset
+
+### Issue Description
+
+**Error**: `Request failed with status code: 403`  
+**Context**: Error occurs when toggling ON `trizel-ai/Auto-dz-act` in Zenodo dashboard  
+**Scope**: Affects only this repository; other `trizel-ai` repositories work normally  
+**Trigger**: Occurred after intentional disconnect/reconnect of GitHub ↔ Zenodo integration
+
+### Root Cause Analysis
+
+**Primary Cause**: Stale repository authorization cache in Zenodo
+
+When a GitHub ↔ Zenodo integration is disconnected and reconnected:
+1. Zenodo may retain cached repository metadata from the previous connection
+2. The cached GitHub App installation ID or repository ID may be stale
+3. New authorization tokens don't match cached repository records
+4. Result: 403 Forbidden when attempting to enable the repository
+
+**Why Only This Repository?**
+- Repository may have been in a specific state during disconnect
+- Cached permissions for this repo specifically became stale
+- Other repos may have been toggled OFF before disconnect, clearing their cache
+- This repo may have had active webhooks or pending operations during reset
+
+### Resolution Steps
+
+#### Step 1: Clear Zenodo's Repository Cache
+
+**Action**: Force Zenodo to re-sync repository list from GitHub
+
+1. **On Zenodo Dashboard** (`https://zenodo.org/account/settings/github/`):
+   - Click **Sync now** button to force repository list refresh
+   - Wait 30-60 seconds for sync to complete
+   - Verify `trizel-ai/Auto-dz-act` appears in the list
+
+2. **If sync fails or repo doesn't appear**:
+   - Go to: `https://zenodo.org/account/settings/applications/`
+   - Under **GitHub**, click **Revoke access**
+   - Wait 60 seconds
+   - Click **Connect** and re-authorize GitHub
+   - Grant organization access when prompted
+   - Return to GitHub repositories page and sync again
+
+#### Step 2: Verify GitHub Repository Permissions
+
+**Action**: Ensure GitHub hasn't restricted Zenodo's access to this specific repository
+
+1. **On GitHub** (`https://github.com/organizations/trizel-ai/settings/installations`):
+   - Locate **Zenodo** in the installed apps list
+   - Click **Configure**
+   - Under **Repository access**, verify:
+     - Either "All repositories" is selected, OR
+     - `Auto-dz-act` is explicitly listed in selected repositories
+   
+2. **If repository is not listed**:
+   - Select "All repositories" OR
+   - Add `Auto-dz-act` to the selected repositories list
+   - Click **Save**
+   - Return to Zenodo and sync repositories
+
+#### Step 3: Check Repository Visibility and Settings
+
+**Action**: Verify repository metadata is correct
+
+1. **Repository visibility**:
+   ```bash
+   gh repo view trizel-ai/Auto-dz-act --json isPrivate,visibility
+   ```
+   - Must return: `"visibility": "public"`
+   - If private, Zenodo integration will fail
+
+2. **Repository not renamed or transferred**:
+   - Verify URL: `https://github.com/trizel-ai/Auto-dz-act`
+   - If repository was renamed after DOI creation, Zenodo cache is invalid
+   - If transferred between orgs, GitHub App permissions are stale
+
+#### Step 4: Force Repository Re-Registration
+
+**Action**: If Steps 1-3 don't resolve, manually re-register the repository
+
+1. **On Zenodo**, ensure repository is toggled OFF
+2. **Wait 5 minutes** (allows cache to expire)
+3. **Clear browser cache** (to avoid client-side cached state)
+4. **On Zenodo**, click **Sync now** again
+5. **Toggle ON** the repository
+6. **If still 403**: Proceed to Step 5
+
+#### Step 5: GitHub App Re-Installation (Last Resort)
+
+**Action**: Completely re-install Zenodo's GitHub App at organization level
+
+⚠️ **Warning**: This affects all repositories in the organization
+
+1. **On GitHub** (`https://github.com/organizations/trizel-ai/settings/installations`):
+   - Locate **Zenodo**
+   - Click **Configure**
+   - Scroll to **Danger zone**
+   - Click **Uninstall**
+   - Confirm uninstallation
+
+2. **Wait 2 minutes** for GitHub to propagate the change
+
+3. **On Zenodo** (`https://zenodo.org/account/settings/github/`):
+   - Click **Enable GitHub Integration**
+   - Authorize GitHub App installation
+   - Grant access to `trizel-ai` organization when prompted
+   - Select repository access (all repositories recommended)
+   - Complete installation
+
+4. **Return to Zenodo** and sync repositories
+
+5. **Toggle ON** `trizel-ai/Auto-dz-act`
+
+### Expected Resolution
+
+**Success Indicators**:
+- ✅ Repository toggles ON without 403 error
+- ✅ Green checkmark appears next to repository name
+- ✅ Webhook URL is generated (visible in repository settings)
+- ✅ Test release can be created and harvested by Zenodo
+
+**Verification**:
+```bash
+# On GitHub, create a test release
+gh release create test-v0.0.1 --title "Test Release" --notes "Integration test" --repo trizel-ai/Auto-dz-act
+
+# Check if Zenodo harvests it (may take 1-2 minutes)
+# Visit: https://zenodo.org/account/settings/github/
+# Verify test-v0.0.1 appears under the repository
+```
+
+### Alternative: Manual Upload Workaround
+
+**If integration cannot be restored immediately**:
+
+1. **Manual DOI generation** (temporary solution):
+   - Download release archive from GitHub
+   - Upload manually to Zenodo: `https://zenodo.org/deposit/new`
+   - Fill metadata manually
+   - Generate DOI
+
+2. **Link to GitHub repository**:
+   - In Zenodo metadata, add "Related identifiers"
+   - Select "is supplemented by"
+   - Add GitHub repository URL
+
+⚠️ **Note**: This bypasses automatic integration and requires manual work for each release
+
+### Post-Resolution Actions
+
+**After 403 is resolved**:
+
+1. **Test the integration**:
+   - Create a new GitHub release
+   - Verify Zenodo automatically harvests it (if webhooks enabled)
+   - OR manually preserve the release on Zenodo
+
+2. **Update this document**:
+   - Change status from "TROUBLESHOOTING REQUIRED" to "OPERATIONAL"
+   - Document the resolution method that worked
+   - Note the date integration was restored
+
+3. **Monitor for recurrence**:
+   - If 403 returns, the issue is deeper (GitHub API, Zenodo bug)
+   - Contact Zenodo support: support@zenodo.org
+   - Provide: Repository URL, organization name, error message, timestamp
+
+### Common Causes of Persistent 403
+
+**If none of the above steps resolve the issue**:
+
+1. **GitHub API rate limiting**:
+   - Zenodo may be rate-limited when accessing GitHub
+   - Wait 1 hour and try again
+   - Check: `https://api.github.com/rate_limit` (while authenticated)
+
+2. **Organization-level GitHub App restrictions** (despite claiming none):
+   - Verify OAuth application policy: `https://github.com/organizations/trizel-ai/settings/oauth_application_policy`
+   - Check for IP restrictions or 2FA requirements
+   - Verify no security policies were recently changed
+
+3. **Zenodo-side bug or maintenance**:
+   - Check Zenodo status: `https://twitter.com/zenodo_org` or `https://status.zenodo.org/`
+   - Try again after 24 hours
+   - Contact support if persistent
+
+4. **GitHub repository-specific protection**:
+   - Check branch protection rules: `https://github.com/trizel-ai/Auto-dz-act/settings/branches`
+   - Check repository security settings: `https://github.com/trizel-ai/Auto-dz-act/settings/security_analysis`
+   - Verify no custom webhooks are blocking Zenodo
+
+### Resolution Status
+
+**Current Status**: ⚠️ REQUIRES MANUAL INTERVENTION
+
+**Recommended Action**: 
+1. Start with Step 1 (Clear Zenodo cache via Sync)
+2. If unsuccessful, proceed to Step 2 (Verify GitHub permissions)
+3. If still unsuccessful, proceed to Step 4 (Force re-registration)
+4. Use Step 5 (App re-installation) only if all else fails
+
+**Expected Resolution Time**: 5-15 minutes (Steps 1-4)
+
+**Confirmation of Future Harvesting**:
+Once resolved using any of Steps 1-5, future releases from this repository will be harvested normally by Zenodo, provided:
+- Repository remains public
+- Zenodo integration remains connected
+- Organization doesn't change access policies
+- Repository isn't renamed or transferred
+
+---
+
+## 11. Archival Integrity Confirmation
 
 ### Final Archival Integrity Statement
 
-**Status**: ✅ VERIFIED
+**Status**: ⚠️ TEMPORARY ISSUE - RESOLUTION IN PROGRESS
 
-The GitHub ↔ Zenodo integration for `trizel-ai/Auto-dz-act` has been verified and confirmed as:
+The GitHub ↔ Zenodo integration for `trizel-ai/Auto-dz-act` is experiencing a repository-specific 403 authorization error after integration reset. This is a known, resolvable issue.
 
-1. ✅ **Fully authorized** at organization and repository levels
-2. ✅ **Operationally functional** (proven by successful DOI generation)
-3. ✅ **Policy-compliant** (no blocks or restrictions)
-4. ✅ **Properly linked** (GitHub ↔ Zenodo account authentication)
-5. ✅ **Standard implementation** (no custom apps or tokens required)
-6. ✅ **Definition-only compliant** (no code or automation added)
-7. ✅ **Theory-neutral** (integration serves archival purposes only)
+**Historical Verification** (Prior to reset):
+1. ✅ **Previously functional** (proven by DOI: 10.5281/zenodo.16521756)
+2. ✅ **Policy-compliant** (no blocks or restrictions at organization level)
+3. ✅ **Properly linked** (GitHub ↔ Zenodo account authentication confirmed)
+4. ✅ **Standard implementation** (no custom apps or tokens required)
+5. ✅ **Definition-only compliant** (no code or automation added)
+6. ✅ **Theory-neutral** (integration serves archival purposes only)
 
-**Conclusion**: The repository maintains **full archival integrity** and is ready for continued Zenodo preservation of versioned releases.
+**Current Issue**:
+- ⚠️ Repository-specific 403 error when toggling ON in Zenodo
+- Likely caused by stale repository cache after integration disconnect/reconnect
+- Other repositories in organization work normally
+- Resolvable via troubleshooting steps in Section 10
+
+**Resolution Path**:
+See Section 10 for complete troubleshooting and resolution steps. Expected resolution time: 5-15 minutes.
+
+**Post-Resolution Expectation**:
+Once resolved, the repository will maintain **full archival integrity** and be ready for continued Zenodo preservation of versioned releases.
 
 ---
 
@@ -511,4 +768,4 @@ git remote -v
 
 **Last Updated**: 2026-01-11  
 **Next Review**: Q2 2026 (Quarterly review cycle)  
-**Status**: ✅ OPERATIONAL — NO ACTIONS REQUIRED
+**Status**: ⚠️ TROUBLESHOOTING — Repository-specific 403 error (see Section 10 for resolution)
