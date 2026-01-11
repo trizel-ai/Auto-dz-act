@@ -15,6 +15,7 @@ This repository is organized as a **definition-only** reference for AUTO DZ ACT.
 - **MULTILINGUAL_POLICY.md** — Multilingual availability and platform coupling requirements
 - **GOVERNANCE.md** — Branch protection and governance requirements
 - **REPOSITORY_STRUCTURE.md** — This file
+- **ZENODO_ARTICLE.md** — Publication-ready scientific article for Zenodo archival
 
 ---
 
