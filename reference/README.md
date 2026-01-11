@@ -16,6 +16,7 @@ Documentation-only placeholders.
 
 - **REFERENCE_REQUESTS.md** — Formal authorization and request intake policy
 - **GLOSSARY.md** — Terminology and definitions
+- **GITHUB_ZENODO_INTEGRATION_VERIFICATION.md** — GitHub-Zenodo integration verification report and compliance documentation
 
 ---
 

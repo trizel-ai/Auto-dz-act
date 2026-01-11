@@ -25,6 +25,7 @@ Contains formal policies and reference materials:
 - **README.md** — Directory purpose and scope
 - **REFERENCE_REQUESTS.md** — Formal authorization and request intake policy
 - **GLOSSARY.md** — Terminology and definitions
+- **GITHUB_ZENODO_INTEGRATION_VERIFICATION.md** — GitHub-Zenodo integration verification and compliance documentation
 
 ### docs/
 Contains extended documentation:
