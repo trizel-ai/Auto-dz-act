@@ -1,0 +1,31 @@
+# Canonical Author and Publication Metadata Template
+# This file is the single source of truth for author and publication metadata.
+# Reuse unchanged across repositories and publication systems.
+
+author:
+  name: "Abdelkader Omran"
+  orcid: "0009-0003-9884-3697"
+  affiliation: "TRIZEL-AI — Independent Research Platform"
+  website: "https://trizel-ai.com/"
+  email: "admin1@trizel-ai.com"
+
+publication_metadata:
+  title: ""
+  description: ""
+  version: "1.0"
+  creators:
+    - name: "Abdelkader Omran"
+      orcid: "0009-0003-9884-3697"
+      affiliation: "TRIZEL-AI — Independent Research Platform"
+  contributors: []
+  license: ""
+  publication_date: ""
+  keywords: []
+  related_identifiers: []
+  access_right: "open"          # open | closed | embargoed | restricted
+  communities: []               # Zenodo communities (optional)
+  upload_type: "publication"    # publication | dataset | software | poster | presentation
+  language: "en"
+  description_format: "text/markdown"
+  references: []
+  grants: []
