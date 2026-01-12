@@ -1,12 +1,10 @@
-# Governance Reference
+# Project Governance Reference
 
-This repository operates under the TRIZEL Cross-Repository Governance framework.
+This document serves as a canonical pointer to the governance structure for this project.
 
-Governance is defined, versioned, and maintained exclusively in the canonical source below.
-No local governance interpretation or modification is permitted.
+For information about the project's governance policies, decision-making processes, roles, responsibilities, and how contributors can participate, please refer to:
 
-Canonical source:
-- trizel-ai/trizel-core/docs/governance/CROSS_REPO_GOVERNANCE.md
+- [Project Governance Guide](../GOVERNANCE.md)
+- [CONTRIBUTING Guidelines](../CONTRIBUTING.md)
 
-Current state:
-Execution remains intentionally locked pending verifiable governance enforcement checks.
+For any questions regarding governance, please open an issue under the "governance" label or reach out to the project maintainers.
