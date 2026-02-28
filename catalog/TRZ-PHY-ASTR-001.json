@@ -1,0 +1,14 @@
+{
+  "id": "TRZ-PHY-ASTR-001",
+  "source": "trizel-core",
+  "canonical_file_path": "trizel_core/physics/catalog/TRZ-PHY-ASTR-001.json",
+  "status": "canonical",
+  "inputs": {
+    "Y_SOLAR_TT_DAYS": "365.25",
+    "Y_LUNAR_12_SYNODIC_DAYS": "354.36708"
+  },
+  "approved_rational_forms": {
+    "fast": {"p": 365, "q": 354},
+    "stable": {"p": 4383, "q": 4251}
+  }
+}
