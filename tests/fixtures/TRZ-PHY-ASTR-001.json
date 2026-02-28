@@ -1,4 +1,5 @@
 {
+  "_comment": "TEST FIXTURE ONLY — not a vendored canonical source. trizel-core remains the sole truth source for TRZ-PHY-ASTR-001.",
   "id": "TRZ-PHY-ASTR-001",
   "source": "trizel-core",
   "canonical_file_path": "trizel_core/physics/catalog/TRZ-PHY-ASTR-001.json",
