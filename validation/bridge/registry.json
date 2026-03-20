@@ -1,0 +1,19 @@
+{
+  "registry_version": "1.0",
+  "description": "Controlled source-to-case mapping for the TRIZEL validation bridge. Every extraction must be declared here before it can proceed.",
+  "entries": [
+    {
+      "case_id": "case-001-asteroid",
+      "phenomenon_class": "small_body_asteroid",
+      "source_repository": "AUTO-DZ-ACT-ANALYSIS-3I-ATLAS",
+      "source_organization": "trizel-ai",
+      "allowed_source_paths": [
+        "PLACEHOLDER: repository-visible source paths not yet confirmed. Update this entry once file paths from AUTO-DZ-ACT-ANALYSIS-3I-ATLAS are confirmed as repository-visible."
+      ],
+      "allowed_transformations": [],
+      "target_case_raw_dir": "validation/cases/case-001-asteroid/raw",
+      "extraction_status": "pending_path_confirmation",
+      "notes": "Source repository is AUTO-DZ-ACT-ANALYSIS-3I-ATLAS (trizel-ai). Extraction must not proceed until at least one repository-visible source path is confirmed and this entry is updated. No synthetic paths have been invented."
+    }
+  ]
+}
