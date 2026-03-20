@@ -4,7 +4,7 @@
   "type": "structured_epistemic_output",
   "repository": "Auto-dz-act",
   "epistemic_layer": "Layer-1",
-  "status": "incomplete",
-  "description": "Structured output derived from normalized asteroid observational data",
+  "status": "source_extraction_pending",
+  "description": "Structured output to be derived from normalized asteroid observational data produced by AUTO-DZ-ACT-ANALYSIS-3I-ATLAS pipeline. Population blocked until source data is accessible and safely extractable.",
   "provenance_required": true
 }
