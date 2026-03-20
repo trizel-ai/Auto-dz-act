@@ -843,6 +843,85 @@ class TestUpdateDualSourceProvenance(unittest.TestCase):
             self.assertNotIn("note", prov)
             self.assertNotIn("data_origin", prov)
 
+    def test_selection_info_written_as_nested_selection_dict(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            entry = {
+                "case_id": "test",
+                "raw_source_repository": "org/DAILY",
+                "normalized_source_repository": "org/ANALYSIS",
+                "target_case_raw_dir": "raw",
+                "governance_reference": "bridge_rules.md",
+            }
+            sel_info = {
+                "selection_method": "latest_by_true_time",
+                "selected_retrieved_utc": "2026-03-20T06:00:00+00:00",
+                "invalid_candidates": 1,
+                "total_candidates": 3,
+            }
+            update_dual_source_provenance(
+                entry, [], [], "1.2", tmpdir, self.logger,
+                raw_selection_info=sel_info,
+            )
+
+            prov_path = os.path.join(tmpdir, "provenance.json")
+            with open(prov_path) as f:
+                prov = json.load(f)
+
+            self.assertIn("selection", prov)
+            sel = prov["selection"]
+            self.assertEqual(sel["method"], "latest_by_true_time")
+            self.assertEqual(sel["selected_retrieved_utc"], "2026-03-20T06:00:00+00:00")
+            self.assertEqual(sel["invalid_candidates"], 1)
+            self.assertEqual(sel["total_candidates"], 3)
+
+    def test_selection_block_absent_when_no_selection_info(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            entry = {
+                "case_id": "test",
+                "raw_source_repository": "org/DAILY",
+                "normalized_source_repository": "org/ANALYSIS",
+                "target_case_raw_dir": "raw",
+                "governance_reference": "bridge_rules.md",
+            }
+            update_dual_source_provenance(
+                entry, [], [], "1.2", tmpdir, self.logger
+            )
+
+            prov_path = os.path.join(tmpdir, "provenance.json")
+            with open(prov_path) as f:
+                prov = json.load(f)
+            self.assertNotIn("selection", prov)
+
+    def test_old_flat_selection_fields_migrated_on_update(self):
+        """Existing flat selection_method/selected_retrieved_utc fields removed."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            prov_path = os.path.join(tmpdir, "provenance.json")
+            with open(prov_path, "w") as f:
+                json.dump({
+                    "selection_method": "old_flat",
+                    "selected_retrieved_utc": "2026-03-18T00:00:00+00:00",
+                    "selection_candidates": 2,
+                }, f)
+
+            entry = {
+                "case_id": "test",
+                "raw_source_repository": "org/DAILY",
+                "normalized_source_repository": "org/ANALYSIS",
+                "target_case_raw_dir": "raw",
+                "governance_reference": "bridge_rules.md",
+            }
+            update_dual_source_provenance(
+                entry, [], [], "1.2", tmpdir, self.logger
+            )
+
+            with open(prov_path) as f:
+                prov = json.load(f)
+            # Flat fields must be removed; no new "selection" block without info.
+            self.assertNotIn("selection_method", prov)
+            self.assertNotIn("selected_retrieved_utc", prov)
+            self.assertNotIn("selection_candidates", prov)
+            self.assertNotIn("selection", prov)
+
 
 # ---------------------------------------------------------------------------
 # update_case_manifest
@@ -1414,7 +1493,12 @@ class TestResolveSourceStrategy(unittest.TestCase):
             result = resolve_source_strategy(
                 STRATEGY_LATEST_DAILY_OBSERVATION, tmpdir, self.logger
             )
-        self.assertEqual(result, "observations/2026-03-20/observation.json")
+        self.assertIsInstance(result, dict)
+        self.assertEqual(result["path"], "observations/2026-03-20/observation.json")
+        self.assertEqual(result["selection_method"], STRATEGY_LATEST_DAILY_OBSERVATION)
+        self.assertIsNone(result["selected_retrieved_utc"])
+        self.assertEqual(result["invalid_candidates"], 0)
+        self.assertEqual(result["total_candidates"], 0)
 
     def test_latest_analysis_normalized_returns_path(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -1422,9 +1506,13 @@ class TestResolveSourceStrategy(unittest.TestCase):
             result = resolve_source_strategy(
                 STRATEGY_LATEST_ANALYSIS_NORMALIZED, tmpdir, self.logger
             )
+        self.assertIsInstance(result, dict)
         self.assertEqual(
-            result,
+            result["path"],
             "public/observations/2026-03-19/normalized_observation.json",
+        )
+        self.assertEqual(
+            result["selection_method"], STRATEGY_LATEST_ANALYSIS_NORMALIZED
         )
 
     def test_no_valid_files_raises_runtime_error(self):
@@ -1458,7 +1546,12 @@ class TestResolveSourceStrategy(unittest.TestCase):
             result = resolve_source_strategy(
                 STRATEGY_LATEST_BY_TRUE_TIME, tmpdir, self.logger
             )
-        self.assertEqual(result, "observations/2026-03-20/observation.json")
+        self.assertIsInstance(result, dict)
+        self.assertEqual(result["path"], "observations/2026-03-20/observation.json")
+        self.assertEqual(result["selection_method"], "latest_by_true_time")
+        self.assertIsNotNone(result["selected_retrieved_utc"])
+        self.assertEqual(result["invalid_candidates"], 0)
+        self.assertEqual(result["total_candidates"], 2)
 
     def test_latest_by_true_time_no_candidates_raises_runtime_error(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -1466,6 +1559,74 @@ class TestResolveSourceStrategy(unittest.TestCase):
                 resolve_source_strategy(
                     STRATEGY_LATEST_BY_TRUE_TIME, tmpdir, self.logger
                 )
+
+    def test_latest_by_true_time_populates_selection_meta_on_success(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            obs_dir = os.path.join(tmpdir, "observations", "2026-03-20")
+            os.makedirs(obs_dir, exist_ok=True)
+            with open(os.path.join(obs_dir, "observation.json"), "w") as f:
+                json.dump({"retrieved_utc": "2026-03-20T06:00:00Z"}, f)
+            result = resolve_source_strategy(
+                STRATEGY_LATEST_BY_TRUE_TIME, tmpdir, self.logger
+            )
+        self.assertEqual(result["selection_method"], "latest_by_true_time")
+        self.assertIsNotNone(result["selected_retrieved_utc"])
+        self.assertEqual(result["invalid_candidates"], 0)
+        self.assertEqual(result["total_candidates"], 1)
+
+    def test_latest_by_true_time_fallback_when_no_retrieved_utc(self):
+        """Files exist but have no retrieved_utc → fallback to folder-date order."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            for date in ["2026-03-15", "2026-03-20"]:
+                obs_dir = os.path.join(tmpdir, "observations", date)
+                os.makedirs(obs_dir, exist_ok=True)
+                with open(os.path.join(obs_dir, "observation.json"), "w") as f:
+                    json.dump({"other_field": "no timestamp here"}, f)
+            result = resolve_source_strategy(
+                STRATEGY_LATEST_BY_TRUE_TIME, tmpdir, self.logger
+            )
+        # Fallback picks the latest folder date.
+        self.assertEqual(result["path"], "observations/2026-03-20/observation.json")
+        self.assertEqual(result["selection_method"], "fallback_latest_date")
+        self.assertIsNone(result["selected_retrieved_utc"])
+        self.assertEqual(result["invalid_candidates"], 2)
+        self.assertEqual(result["total_candidates"], 2)
+
+    def test_latest_by_true_time_fallback_with_invalid_timestamp(self):
+        """Files have invalid timestamps → fallback activates."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            obs_dir = os.path.join(tmpdir, "observations", "2026-03-18")
+            os.makedirs(obs_dir, exist_ok=True)
+            with open(os.path.join(obs_dir, "observation.json"), "w") as f:
+                json.dump({"retrieved_utc": "not-a-valid-date"}, f)
+            result = resolve_source_strategy(
+                STRATEGY_LATEST_BY_TRUE_TIME, tmpdir, self.logger
+            )
+        self.assertEqual(result["path"], "observations/2026-03-18/observation.json")
+        self.assertEqual(result["selection_method"], "fallback_latest_date")
+        self.assertEqual(result["invalid_candidates"], 1)
+
+    def test_latest_by_true_time_mixed_valid_invalid_candidates(self):
+        """Mixed candidates: valid retrieved_utc wins over invalid ones."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Valid: folder 2026-03-18, retrieved_utc 2026-03-18
+            valid_dir = os.path.join(tmpdir, "observations", "2026-03-18")
+            os.makedirs(valid_dir, exist_ok=True)
+            with open(os.path.join(valid_dir, "observation.json"), "w") as f:
+                json.dump({"retrieved_utc": "2026-03-18T12:00:00Z"}, f)
+            # Invalid: folder 2026-03-20, no retrieved_utc
+            invalid_dir = os.path.join(tmpdir, "observations", "2026-03-20")
+            os.makedirs(invalid_dir, exist_ok=True)
+            with open(os.path.join(invalid_dir, "observation.json"), "w") as f:
+                json.dump({"other": "no_timestamp"}, f)
+            result = resolve_source_strategy(
+                STRATEGY_LATEST_BY_TRUE_TIME, tmpdir, self.logger
+            )
+        # The valid file wins via true-time (not fallback).
+        self.assertEqual(result["path"], "observations/2026-03-18/observation.json")
+        self.assertEqual(result["selection_method"], "latest_by_true_time")
+        self.assertEqual(result["invalid_candidates"], 1)
+        self.assertEqual(result["total_candidates"], 2)
 
 
 # ---------------------------------------------------------------------------
@@ -1803,5 +1964,176 @@ class TestRunExtractionStrategyMode(unittest.TestCase):
                 os.unlink(ws_path)
 
 
-if __name__ == "__main__":
-    unittest.main()
+# ---------------------------------------------------------------------------
+# run_extraction - latest_by_true_time strategy integration
+# ---------------------------------------------------------------------------
+
+class TestRunExtractionTrueTimeStrategy(unittest.TestCase):
+    """Integration tests for run_extraction with latest_by_true_time strategy."""
+
+    def setUp(self):
+        self.logger = _make_logger()
+
+    def _setup_workspace(self, *repo_dirs) -> str:
+        repos = [
+            "trizel-ai/Auto-dz-act",
+            "abdelkader-omran/AUTO-DZ-ACT-3I-ATLAS-DAILY",
+            "abdelkader-omran/AUTO-DZ-ACT-ANALYSIS-3I-ATLAS",
+        ]
+        registry = {
+            "workspace_version": "1.0",
+            "repositories": [
+                {
+                    "repository": name,
+                    "expected_local_path": path,
+                    "local_path_status": "confirmed",
+                    "visibility_required": True,
+                }
+                for name, path in zip(repos, repo_dirs)
+            ],
+        }
+        return _write_json(registry)
+
+    def _make_daily_tree_with_utc(
+        self, base: str, dates_and_utc: list[tuple[str, str | None]]
+    ) -> None:
+        """Create observations/YYYY-MM-DD/observation.json, optionally with retrieved_utc."""
+        for date, utc in dates_and_utc:
+            path = os.path.join(base, "observations", date)
+            os.makedirs(path, exist_ok=True)
+            data = {"date": date}
+            if utc:
+                data["retrieved_utc"] = utc
+            with open(os.path.join(path, "observation.json"), "w") as f:
+                json.dump(data, f)
+
+    def _make_analysis_tree(self, base: str, dates: list[str]) -> None:
+        for date in dates:
+            path = os.path.join(base, "public", "observations", date)
+            os.makedirs(path, exist_ok=True)
+            with open(os.path.join(path, "normalized_observation.json"), "w") as f:
+                json.dump({"date": date}, f)
+
+    def test_true_time_selection_provenance_has_selection_block(self):
+        """Provenance must include nested 'selection' dict when true-time is used."""
+        with tempfile.TemporaryDirectory() as repo_root, \
+                tempfile.TemporaryDirectory() as wd1, \
+                tempfile.TemporaryDirectory() as wd2, \
+                tempfile.TemporaryDirectory() as wd3:
+
+            # Folder 2026-03-20 has older UTC; folder 2026-03-18 has newer UTC.
+            # True-time should select 2026-03-18 (newer UTC despite older folder).
+            self._make_daily_tree_with_utc(wd2, [
+                ("2026-03-18", "2026-03-20T12:00:00Z"),
+                ("2026-03-20", "2026-03-18T00:00:00Z"),
+            ])
+            self._make_analysis_tree(wd3, ["2026-03-19"])
+
+            registry = {
+                "registry_version": "1.2",
+                "entries": [{
+                    "case_id": "case-001-asteroid",
+                    "raw_source_repository": (
+                        "abdelkader-omran/AUTO-DZ-ACT-3I-ATLAS-DAILY"
+                    ),
+                    "normalized_source_repository": (
+                        "abdelkader-omran/AUTO-DZ-ACT-ANALYSIS-3I-ATLAS"
+                    ),
+                    "raw_source_strategy": STRATEGY_LATEST_BY_TRUE_TIME,
+                    "normalized_source_strategy": STRATEGY_LATEST_ANALYSIS_NORMALIZED,
+                    "target_case_raw_dir": "cases/case-001-asteroid/raw",
+                    "target_case_normalized_dir": "cases/case-001-asteroid/normalized",
+                    "extraction_status": "approved",
+                    "governance_reference": "bridge_rules.md",
+                }],
+            }
+            reg_path = _write_json(registry)
+            ws_path = self._setup_workspace(wd1, wd2, wd3)
+            try:
+                run_extraction(
+                    case_id="case-001-asteroid",
+                    registry_path=reg_path,
+                    workspace_path=ws_path,
+                    repo_root=repo_root,
+                    logger=self.logger,
+                )
+                prov_path = os.path.join(
+                    repo_root, "cases/case-001-asteroid/provenance.json"
+                )
+                with open(prov_path) as f:
+                    prov = json.load(f)
+
+                # Selection block must exist with correct fields.
+                self.assertIn("selection", prov)
+                sel = prov["selection"]
+                self.assertEqual(sel["method"], "latest_by_true_time")
+                self.assertIsNotNone(sel["selected_retrieved_utc"])
+                self.assertEqual(sel["invalid_candidates"], 0)
+                self.assertEqual(sel["total_candidates"], 2)
+
+                # True-time picks 2026-03-18 folder (it has the newer UTC).
+                self.assertIn("2026-03-18", prov["source_files"]["raw"][0])
+            finally:
+                os.unlink(reg_path)
+                os.unlink(ws_path)
+
+    def test_fallback_selection_provenance_shows_fallback_method(self):
+        """Provenance reflects fallback_latest_date when true-time fails."""
+        with tempfile.TemporaryDirectory() as repo_root, \
+                tempfile.TemporaryDirectory() as wd1, \
+                tempfile.TemporaryDirectory() as wd2, \
+                tempfile.TemporaryDirectory() as wd3:
+
+            # No retrieved_utc in any candidate → fallback must activate.
+            self._make_daily_tree_with_utc(wd2, [
+                ("2026-03-15", None),
+                ("2026-03-20", None),
+            ])
+            self._make_analysis_tree(wd3, ["2026-03-19"])
+
+            registry = {
+                "registry_version": "1.2",
+                "entries": [{
+                    "case_id": "case-001-asteroid",
+                    "raw_source_repository": (
+                        "abdelkader-omran/AUTO-DZ-ACT-3I-ATLAS-DAILY"
+                    ),
+                    "normalized_source_repository": (
+                        "abdelkader-omran/AUTO-DZ-ACT-ANALYSIS-3I-ATLAS"
+                    ),
+                    "raw_source_strategy": STRATEGY_LATEST_BY_TRUE_TIME,
+                    "normalized_source_strategy": STRATEGY_LATEST_ANALYSIS_NORMALIZED,
+                    "target_case_raw_dir": "cases/case-001-asteroid/raw",
+                    "target_case_normalized_dir": "cases/case-001-asteroid/normalized",
+                    "extraction_status": "approved",
+                    "governance_reference": "bridge_rules.md",
+                }],
+            }
+            reg_path = _write_json(registry)
+            ws_path = self._setup_workspace(wd1, wd2, wd3)
+            try:
+                run_extraction(
+                    case_id="case-001-asteroid",
+                    registry_path=reg_path,
+                    workspace_path=ws_path,
+                    repo_root=repo_root,
+                    logger=self.logger,
+                )
+                prov_path = os.path.join(
+                    repo_root, "cases/case-001-asteroid/provenance.json"
+                )
+                with open(prov_path) as f:
+                    prov = json.load(f)
+
+                self.assertIn("selection", prov)
+                sel = prov["selection"]
+                self.assertEqual(sel["method"], "fallback_latest_date")
+                self.assertIsNone(sel["selected_retrieved_utc"])
+                # All 2 candidates were invalid (no retrieved_utc).
+                self.assertEqual(sel["invalid_candidates"], 2)
+                self.assertEqual(sel["total_candidates"], 2)
+                # Fallback picks latest folder date: 2026-03-20.
+                self.assertIn("2026-03-20", prov["source_files"]["raw"][0])
+            finally:
+                os.unlink(reg_path)
+                os.unlink(ws_path)

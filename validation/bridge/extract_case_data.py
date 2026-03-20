@@ -68,7 +68,10 @@ import sys
 from datetime import datetime, timezone
 from typing import Any
 
-from validation.core.time_selection import select_latest_by_true_time
+from validation.core.time_selection import (
+    extract_retrieved_utc,
+    select_latest_by_true_time,
+)
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -340,6 +343,9 @@ def validate_dual_source_entry(
     raw_root: str,
     normalized_root: str,
     logger: logging.Logger,
+    *,
+    raw_selection_meta: dict[str, Any] | None = None,
+    normalized_selection_meta: dict[str, Any] | None = None,
 ) -> tuple[list[str], list[str]]:
     """Validate a dual-source registry entry.
 
@@ -350,7 +356,9 @@ def validate_dual_source_entry(
         resolved via :func:`resolve_source_strategy` against *raw_root*.
         Likewise ``normalized_source_strategy`` resolves the normalized path
         against *normalized_root*.  The discovered paths are auditable and
-        deterministic.
+        deterministic.  Full selection metadata (method, UTC timestamp,
+        candidate counts) is captured when the callers passes mutable dicts
+        as *raw_selection_meta* / *normalized_selection_meta*.
 
     **Explicit-path mode** (backward compatible):
         If no strategy fields are present, ``allowed_raw_source_paths`` and
@@ -364,6 +372,13 @@ def validate_dual_source_entry(
     normalized_root:
         Absolute local path to the normalized source repository checkout
         (ANALYSIS).
+    raw_selection_meta:
+        Optional mutable dict.  When provided, it is populated with the full
+        selection result returned by :func:`resolve_source_strategy` for the
+        raw source (including ``selection_method``, ``selected_retrieved_utc``,
+        ``invalid_candidates``, ``total_candidates``).
+    normalized_selection_meta:
+        Same as *raw_selection_meta* but for the normalized source.
 
     Returns
     -------
@@ -386,7 +401,10 @@ def validate_dual_source_entry(
             case_id,
             raw_strategy,
         )
-        raw_paths = [resolve_source_strategy(raw_strategy, raw_root, logger)]
+        raw_result = resolve_source_strategy(raw_strategy, raw_root, logger)
+        raw_paths = [raw_result["path"]]
+        if raw_selection_meta is not None:
+            raw_selection_meta.update(raw_result)
         logger.info(
             "Case '%s': raw strategy resolved to '%s'", case_id, raw_paths[0]
         )
@@ -407,9 +425,12 @@ def validate_dual_source_entry(
             case_id,
             normalized_strategy,
         )
-        normalized_paths = [
-            resolve_source_strategy(normalized_strategy, normalized_root, logger)
-        ]
+        norm_result = resolve_source_strategy(
+            normalized_strategy, normalized_root, logger
+        )
+        normalized_paths = [norm_result["path"]]
+        if normalized_selection_meta is not None:
+            normalized_selection_meta.update(norm_result)
         logger.info(
             "Case '%s': normalized strategy resolved to '%s'",
             case_id,
@@ -605,9 +626,8 @@ def _maybe_select_by_true_time(
             f"Strategy '{strategy}': no candidate files found."
         )
 
-    # Unpack the (path, utc_datetime) tuple; the datetime is not needed here
-    # because the caller only records the repository-relative path.
-    abs_path, _ = select_latest_by_true_time(candidates, logger)
+    # Unpack the four-element tuple; counts are not needed by this helper.
+    abs_path, _, _invalid, _total = select_latest_by_true_time(candidates, logger)
     rel_path = os.path.relpath(abs_path, repo_root)
     # Normalise path separators to forward slashes for portability.
     rel_path = rel_path.replace(os.sep, "/")
@@ -618,9 +638,11 @@ def _maybe_select_by_true_time(
 
 
 def resolve_source_strategy(
-    strategy: str, repo_root: str, logger: logging.Logger
-) -> str:
-    """Resolve a named source strategy to a repository-relative file path.
+    strategy: str,
+    repo_root: str,
+    logger: logging.Logger,
+) -> dict[str, Any]:
+    """Resolve a named source strategy to a selection result dict.
 
     Supported strategies
     --------------------
@@ -635,8 +657,11 @@ def resolve_source_strategy(
 
     ``latest_by_true_time``
         Collects all ``observations/YYYY-MM-DD/observation.json`` candidate
-        files under *repo_root* and returns the path of the one whose
-        ``retrieved_utc`` timestamp is the latest.  Folder date is ignored.
+        files under *repo_root* and returns the one whose ``retrieved_utc``
+        timestamp is the latest.  Folder date is ignored for selection.
+        If true-time selection fails (no valid ``retrieved_utc`` found in
+        any candidate), selection falls back to the latest folder-date entry
+        automatically.  The fallback is deterministic and logged.
 
     Parameters
     ----------
@@ -649,8 +674,23 @@ def resolve_source_strategy(
 
     Returns
     -------
-    str
-        Repository-relative path to the discovered file.
+    dict
+        A selection result dict with the following keys:
+
+        ``path`` : str
+            Repository-relative path to the discovered file.
+        ``selection_method`` : str
+            Identifier of the method used (strategy name, or
+            ``"fallback_latest_date"`` when the true-time primary failed).
+        ``selected_retrieved_utc`` : str or None
+            ISO-8601 UTC timestamp of the selected file's ``retrieved_utc``
+            field, or ``None`` when not applicable or unavailable.
+        ``invalid_candidates`` : int
+            Number of candidate files that could not yield a valid
+            ``retrieved_utc`` timestamp (``0`` for non-true-time strategies).
+        ``total_candidates`` : int
+            Total number of candidate files examined
+            (``0`` for non-true-time strategies).
 
     Raises
     ------
@@ -672,7 +712,13 @@ def resolve_source_strategy(
         logger.info(
             "Strategy '%s': discovered latest path '%s'", strategy, rel_path
         )
-        return rel_path
+        return {
+            "path": rel_path,
+            "selection_method": strategy,
+            "selected_retrieved_utc": None,
+            "invalid_candidates": 0,
+            "total_candidates": 0,
+        }
 
     if strategy == STRATEGY_LATEST_ANALYSIS_NORMALIZED:
         rel_path = _find_latest_matching_file(
@@ -687,13 +733,66 @@ def resolve_source_strategy(
         logger.info(
             "Strategy '%s': discovered latest path '%s'", strategy, rel_path
         )
-        return rel_path
+        return {
+            "path": rel_path,
+            "selection_method": strategy,
+            "selected_retrieved_utc": None,
+            "invalid_candidates": 0,
+            "total_candidates": 0,
+        }
 
     if strategy == STRATEGY_LATEST_BY_TRUE_TIME:
         candidates = _collect_candidate_files(
             repo_root, "observations", "observation.json"
         )
-        return _maybe_select_by_true_time(candidates, repo_root, strategy, logger)
+        n_candidates = len(candidates)
+        selected_retrieved_utc: str | None = None
+        n_invalid = 0
+
+        try:
+            abs_path, utc_dt, n_invalid, _ = select_latest_by_true_time(
+                candidates, logger
+            )
+            rel_path = os.path.relpath(abs_path, repo_root).replace(os.sep, "/")
+            selected_retrieved_utc = utc_dt.isoformat()
+            selection_method = "latest_by_true_time"
+        except RuntimeError:
+            n_invalid = n_candidates  # all candidates were invalid
+            logger.warning(
+                "Strategy '%s': true-time selection failed (invalid=%d total=%d), "
+                "falling back to date-based selection",
+                strategy,
+                n_invalid,
+                n_candidates,
+            )
+            rel_path = _find_latest_matching_file(
+                repo_root, "observations", "observation.json"
+            )
+            selection_method = "fallback_latest_date"
+            if rel_path is None:
+                raise RuntimeError(
+                    f"Strategy '{strategy}': fallback also failed — no valid "
+                    "observations/YYYY-MM-DD/observation.json "
+                    f"found under '{repo_root}'."
+                )
+
+        logger.info(
+            "[selection] method=%s selected=%s retrieved_utc=%s "
+            "invalid=%d total=%d",
+            selection_method,
+            rel_path,
+            selected_retrieved_utc or "N/A",
+            n_invalid,
+            n_candidates,
+        )
+
+        return {
+            "path": rel_path,
+            "selection_method": selection_method,
+            "selected_retrieved_utc": selected_retrieved_utc,
+            "invalid_candidates": n_invalid,
+            "total_candidates": n_candidates,
+        }
 
     raise ValueError(
         f"Unknown source strategy: '{strategy}'. "
@@ -939,6 +1038,8 @@ def update_dual_source_provenance(
     registry_version: str,
     repo_root: str,
     logger: logging.Logger,
+    *,
+    raw_selection_info: dict[str, Any] | None = None,
 ) -> None:
     """Update case provenance.json with dual-source extraction metadata.
 
@@ -950,6 +1051,19 @@ def update_dual_source_provenance(
     - extraction_method: bridge_controlled_copy
     - workspace_resolution: confirmed
     - governance_reference: bridge_rules.md
+
+    When *raw_selection_info* is provided (populated by
+    :func:`resolve_source_strategy` for any strategy), the following nested
+    dict is added to provenance under the ``"selection"`` key:
+
+    .. code-block:: json
+
+        {
+          "method": "latest_by_true_time | fallback_latest_date | ...",
+          "selected_retrieved_utc": "2026-03-20T06:00:00+00:00 | null",
+          "invalid_candidates": 0,
+          "total_candidates": 2
+        }
 
     Raises
     ------
@@ -992,6 +1106,22 @@ def update_dual_source_provenance(
     # Remove any legacy/pending notes
     for key in ("note", "data_origin", "source_repository", "source_organization"):
         provenance.pop(key, None)
+
+    # Write nested selection provenance.  Remove legacy flat fields from
+    # any prior run, then write the structured "selection" block when info
+    # is available.
+    for key in ("selection_method", "selected_retrieved_utc", "selection_candidates"):
+        provenance.pop(key, None)
+
+    if raw_selection_info:
+        provenance["selection"] = {
+            "method": raw_selection_info.get("selection_method"),
+            "selected_retrieved_utc": raw_selection_info.get("selected_retrieved_utc"),
+            "invalid_candidates": raw_selection_info.get("invalid_candidates", 0),
+            "total_candidates": raw_selection_info.get("total_candidates", 0),
+        }
+    else:
+        provenance.pop("selection", None)
 
     _write_provenance(provenance, provenance_path, case_id)
     logger.info("Dual-source provenance updated: %s", provenance_path)
@@ -1179,8 +1309,12 @@ def run_extraction(
         logger.info("Normalized source root: %s", normalized_root)
 
         # 4b. Validate entry and resolve source paths against correct roots.
+        # Collect selection metadata for provenance; populated for any
+        # strategy-based resolution (non-empty when a strategy is declared).
+        raw_sel_meta: dict[str, Any] = {}
         raw_paths, normalized_paths = validate_dual_source_entry(
-            entry, raw_root, normalized_root, logger
+            entry, raw_root, normalized_root, logger,
+            raw_selection_meta=raw_sel_meta,
         )
 
         # 5. Extract files (dual-source).
@@ -1190,8 +1324,11 @@ def run_extraction(
         )
 
         # 6. Update provenance with dual-source lineage.
+        # Pass selection info whenever a raw strategy was used; this adds the
+        # nested "selection" block to provenance for full traceability.
         update_dual_source_provenance(
-            entry, raw_records, normalized_records, registry_version, repo_root, logger
+            entry, raw_records, normalized_records, registry_version, repo_root, logger,
+            raw_selection_info=raw_sel_meta or None,
         )
 
         # 7. Update manifest to reflect the completed extraction.
