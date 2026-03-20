@@ -13,6 +13,7 @@ Covers extract_case_data.py behaviour:
 - check_workspace_readiness
 - update_provenance (legacy)
 - update_dual_source_provenance
+- update_case_manifest
 - run_extraction (integration, dual-source and legacy)
 - main() CLI entry point
 """
@@ -46,6 +47,7 @@ from validation.bridge.extract_case_data import (
     _get_repo_local_path,
     update_provenance,
     update_dual_source_provenance,
+    update_case_manifest,
     load_registry,
     find_registry_entry,
     run_extraction,
@@ -840,6 +842,143 @@ class TestUpdateDualSourceProvenance(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
+# update_case_manifest
+# ---------------------------------------------------------------------------
+
+class TestUpdateCaseManifest(unittest.TestCase):
+    """Tests for update_case_manifest."""
+
+    def setUp(self):
+        self.logger = _make_logger()
+
+    def _make_entry(self, tmp_dir: str) -> dict:
+        return {
+            "case_id": "case-001-asteroid",
+            "target_case_raw_dir": "cases/case-001-asteroid/raw",
+            "target_case_normalized_dir": "cases/case-001-asteroid/normalized",
+        }
+
+    def _make_records(self, raw_dest: str, norm_dest: str) -> tuple:
+        raw_records = [{"source_path": "observations/2026-03-20/observation.json",
+                        "destination_path": raw_dest}]
+        norm_records = [{"source_path": "public/observations/2026-03-19/normalized_observation.json",
+                         "destination_path": norm_dest}]
+        return raw_records, norm_records
+
+    def test_sets_extraction_complete_status(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            case_dir = os.path.join(tmp, "cases", "case-001-asteroid")
+            os.makedirs(case_dir)
+            raw_dest = os.path.join("cases", "case-001-asteroid", "raw",
+                                    "observations__2026-03-20__observation.json")
+            norm_dest = os.path.join("cases", "case-001-asteroid", "normalized",
+                                     "public__observations__2026-03-19__normalized_observation.json")
+            entry = self._make_entry(tmp)
+            raw_records, norm_records = self._make_records(raw_dest, norm_dest)
+
+            update_case_manifest(entry, raw_records, norm_records, tmp, self.logger)
+
+            manifest_path = os.path.join(case_dir, "manifest.json")
+            self.assertTrue(os.path.isfile(manifest_path))
+            with open(manifest_path) as f:
+                manifest = json.load(f)
+            self.assertEqual(manifest["status"], "extraction_complete")
+
+    def test_file_inventory_contains_extracted_files(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            case_dir = os.path.join(tmp, "cases", "case-001-asteroid")
+            os.makedirs(case_dir)
+            raw_dest = os.path.join("cases", "case-001-asteroid", "raw",
+                                    "observations__2026-03-20__observation.json")
+            norm_dest = os.path.join("cases", "case-001-asteroid", "normalized",
+                                     "public__observations__2026-03-19__normalized_observation.json")
+            entry = self._make_entry(tmp)
+            raw_records, norm_records = self._make_records(raw_dest, norm_dest)
+
+            update_case_manifest(entry, raw_records, norm_records, tmp, self.logger)
+
+            with open(os.path.join(case_dir, "manifest.json")) as f:
+                manifest = json.load(f)
+            self.assertIn(raw_dest, manifest["files"])
+            self.assertIn(norm_dest, manifest["files"])
+
+    def test_removes_pre_extraction_note(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            case_dir = os.path.join(tmp, "cases", "case-001-asteroid")
+            os.makedirs(case_dir)
+            # Write a manifest that has a pre-extraction note.
+            manifest_path = os.path.join(case_dir, "manifest.json")
+            with open(manifest_path, "w") as f:
+                json.dump({
+                    "case_id": "case-001-asteroid",
+                    "status": "pending_workspace_resolution",
+                    "note": "Extraction pending.",
+                    "hash_algorithm": "sha256",
+                    "files": ["raw/", "normalized/"],
+                }, f)
+
+            raw_dest = os.path.join("cases", "case-001-asteroid", "raw",
+                                    "observations__2026-03-20__observation.json")
+            norm_dest = os.path.join("cases", "case-001-asteroid", "normalized",
+                                     "public__observations__2026-03-19__normalized_observation.json")
+            entry = self._make_entry(tmp)
+            raw_records, norm_records = self._make_records(raw_dest, norm_dest)
+
+            update_case_manifest(entry, raw_records, norm_records, tmp, self.logger)
+
+            with open(manifest_path) as f:
+                manifest = json.load(f)
+            self.assertNotIn("note", manifest)
+            self.assertEqual(manifest["status"], "extraction_complete")
+
+    def test_metadata_files_included_when_present(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            case_dir = os.path.join(tmp, "cases", "case-001-asteroid")
+            os.makedirs(case_dir)
+            # Create a real provenance.json to trigger inclusion.
+            with open(os.path.join(case_dir, "provenance.json"), "w") as f:
+                f.write("{}")
+
+            raw_dest = os.path.join("cases", "case-001-asteroid", "raw",
+                                    "observations__2026-03-20__observation.json")
+            norm_dest = os.path.join("cases", "case-001-asteroid", "normalized",
+                                     "public__observations__2026-03-19__normalized_observation.json")
+            entry = self._make_entry(tmp)
+            raw_records, norm_records = self._make_records(raw_dest, norm_dest)
+
+            update_case_manifest(entry, raw_records, norm_records, tmp, self.logger)
+
+            with open(os.path.join(case_dir, "manifest.json")) as f:
+                manifest = json.load(f)
+            self.assertIn("provenance.json", manifest["files"])
+
+    def test_preserves_hash_algorithm(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            case_dir = os.path.join(tmp, "cases", "case-001-asteroid")
+            os.makedirs(case_dir)
+            manifest_path = os.path.join(case_dir, "manifest.json")
+            with open(manifest_path, "w") as f:
+                json.dump({
+                    "case_id": "case-001-asteroid",
+                    "hash_algorithm": "sha256",
+                    "status": "pending_workspace_resolution",
+                    "files": [],
+                }, f)
+
+            entry = self._make_entry(tmp)
+            raw_records = [{"source_path": "observations/2026-03-20/observation.json",
+                             "destination_path": "cases/case-001-asteroid/raw/obs.json"}]
+            norm_records = [{"source_path": "public/observations/2026-03-19/norm.json",
+                              "destination_path": "cases/case-001-asteroid/normalized/norm.json"}]
+
+            update_case_manifest(entry, raw_records, norm_records, tmp, self.logger)
+
+            with open(manifest_path) as f:
+                manifest = json.load(f)
+            self.assertEqual(manifest.get("hash_algorithm"), "sha256")
+
+
+# ---------------------------------------------------------------------------
 # run_extraction — integration
 # ---------------------------------------------------------------------------
 
@@ -1562,6 +1701,28 @@ class TestRunExtractionStrategyMode(unittest.TestCase):
                     prov["processing_status"], "extraction_complete"
                 )
                 self.assertEqual(prov["workspace_resolution"], "confirmed")
+                # extraction_timestamp must be non-null after success.
+                self.assertIsNotNone(prov.get("extraction_timestamp"))
+                self.assertNotEqual(prov.get("extraction_timestamp"), "")
+
+                # Manifest must reflect the extracted state.
+                manifest_path = os.path.join(
+                    repo_root, "cases/case-001-asteroid/manifest.json"
+                )
+                self.assertTrue(os.path.isfile(manifest_path))
+                with open(manifest_path) as f:
+                    manifest = json.load(f)
+                self.assertEqual(manifest["status"], "extraction_complete")
+                # Manifest file list must contain the copied file paths.
+                manifest_files = manifest.get("files", [])
+                self.assertTrue(
+                    any("2026-03-20" in fp for fp in manifest_files),
+                    f"Raw extracted file not in manifest files: {manifest_files}",
+                )
+                self.assertTrue(
+                    any("2026-03-19" in fp for fp in manifest_files),
+                    f"Normalized extracted file not in manifest files: {manifest_files}",
+                )
             finally:
                 os.unlink(reg_path)
                 os.unlink(ws_path)
