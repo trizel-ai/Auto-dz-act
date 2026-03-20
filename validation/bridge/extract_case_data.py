@@ -605,7 +605,9 @@ def _maybe_select_by_true_time(
             f"Strategy '{strategy}': no candidate files found."
         )
 
-    abs_path = select_latest_by_true_time(candidates, logger)
+    # Unpack the (path, utc_datetime) tuple; the datetime is not needed here
+    # because the caller only records the repository-relative path.
+    abs_path, _ = select_latest_by_true_time(candidates, logger)
     rel_path = os.path.relpath(abs_path, repo_root)
     # Normalise path separators to forward slashes for portability.
     rel_path = rel_path.replace(os.sep, "/")

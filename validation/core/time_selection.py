@@ -1,23 +1,31 @@
-"""True-time-based source selection for the TRIZEL validation bridge.
+"""UTC-normalized true-time-based source selection for the TRIZEL validation bridge.
 
 This module provides a reusable engine for selecting the most recent candidate
 file based on the intrinsic ``retrieved_utc`` timestamp embedded in each file,
 rather than relying on storage conventions such as folder-date naming.
 
+All timestamps are normalised to UTC before comparison, ensuring that
+time-zone-independent, epistemically consistent selection is performed.
+
 Public API
 ----------
 extract_retrieved_utc(file_path)
     Read the ``retrieved_utc`` field from a JSON file and return it as an
-    aware :class:`datetime.datetime` object in UTC.
+    aware :class:`datetime.datetime` object normalised to UTC.  Raises on
+    any error so that callers can handle failure explicitly.
 
 select_latest_by_true_time(file_paths, logger=None)
-    Given a collection of candidate file paths, return the path whose JSON
-    content carries the latest ``retrieved_utc`` timestamp.
+    Given a collection of candidate file paths, return ``(path, utc_datetime)``
+    for the file whose ``retrieved_utc`` timestamp is the latest.  Invalid
+    files are skipped with a warning.
 
 Design notes
 ------------
 - Only local JSON files are read.  No network access is performed.
-- Invalid or unreadable files are skipped with a warning; they never raise.
+- All timestamps must be timezone-aware; naive timestamps are rejected.
+- Invalid or unreadable files are skipped inside
+  :func:`select_latest_by_true_time`; they are never silently ignored by
+  :func:`extract_retrieved_utc` itself.
 - If *no* valid candidate is found after scanning all files, a
   :exc:`RuntimeError` is raised so the caller can handle the failure
   explicitly.
@@ -39,8 +47,42 @@ __all__ = [
 _UTC = timezone.utc
 
 
-def extract_retrieved_utc(file_path: str) -> datetime | None:
-    """Return the ``retrieved_utc`` timestamp from a JSON file.
+def _normalize_to_utc(ts: str) -> datetime:
+    """Convert an ISO-8601 timestamp string to a UTC-aware datetime.
+
+    Parameters
+    ----------
+    ts:
+        ISO-8601 timestamp string (with or without trailing ``Z``).
+
+    Returns
+    -------
+    datetime
+        An aware :class:`~datetime.datetime` normalised to UTC.
+
+    Raises
+    ------
+    ValueError
+        If *ts* cannot be parsed as a valid ISO-8601 string, or if the
+        parsed datetime is timezone-naive (all timestamps must carry explicit
+        timezone information).
+    """
+    normalised = ts
+    if normalised.endswith("Z"):
+        normalised = normalised[:-1] + "+00:00"
+
+    dt = datetime.fromisoformat(normalised)
+
+    if dt.tzinfo is None:
+        raise ValueError(
+            f"Timestamp must be timezone-aware: {ts!r}"
+        )
+
+    return dt.astimezone(_UTC)
+
+
+def extract_retrieved_utc(file_path: str) -> datetime:
+    """Return the ``retrieved_utc`` timestamp from a JSON file as UTC.
 
     Parameters
     ----------
@@ -49,50 +91,43 @@ def extract_retrieved_utc(file_path: str) -> datetime | None:
 
     Returns
     -------
-    datetime | None
-        An aware :class:`~datetime.datetime` in UTC, or ``None`` if the file
-        cannot be read, is not valid JSON, does not contain the
-        ``retrieved_utc`` key, or contains a value that cannot be parsed as
-        an ISO-8601 timestamp.
+    datetime
+        An aware :class:`~datetime.datetime` normalised to UTC.
+
+    Raises
+    ------
+    OSError
+        If the file cannot be opened or read.
+    json.JSONDecodeError
+        If the file does not contain valid JSON.
+    ValueError
+        If the JSON content is not an object, the ``retrieved_utc`` key is
+        missing or not a non-empty string, or the value cannot be parsed as
+        a timezone-aware ISO-8601 timestamp.
     """
-    try:
-        with open(file_path, encoding="utf-8") as fh:
-            data = json.load(fh)
-    except (OSError, json.JSONDecodeError):
-        return None
+    with open(file_path, encoding="utf-8") as fh:
+        data = json.load(fh)
 
     if not isinstance(data, dict):
-        return None
+        raise ValueError(
+            f"Expected a JSON object in {file_path!r}, "
+            f"got {type(data).__name__}."
+        )
 
     raw_value = data.get("retrieved_utc")
     if not isinstance(raw_value, str) or not raw_value:
-        return None
+        raise ValueError(
+            f"Missing or invalid retrieved_utc in {file_path!r}."
+        )
 
-    # Normalise the trailing 'Z' UTC designator for compatibility with
-    # Python versions that do not accept it in fromisoformat().
-    normalised = raw_value
-    if normalised.endswith("Z"):
-        normalised = normalised[:-1] + "+00:00"
-
-    try:
-        dt = datetime.fromisoformat(normalised)
-    except ValueError:
-        return None
-
-    # Ensure the result is always timezone-aware (UTC).
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=_UTC)
-    else:
-        dt = dt.astimezone(_UTC)
-
-    return dt
+    return _normalize_to_utc(raw_value)
 
 
 def select_latest_by_true_time(
     file_paths: Sequence[str],
     logger: logging.Logger | None = None,
-) -> str:
-    """Return the path of the file with the latest ``retrieved_utc`` timestamp.
+) -> tuple[str, datetime]:
+    """Return the path and UTC timestamp of the file with the latest retrieved_utc.
 
     Parameters
     ----------
@@ -104,9 +139,9 @@ def select_latest_by_true_time(
 
     Returns
     -------
-    str
-        The element of *file_paths* whose JSON content contains the greatest
-        ``retrieved_utc`` value.
+    (path, utc_datetime)
+        A tuple of the winning file path and its UTC
+        :class:`~datetime.datetime`.
 
     Raises
     ------
@@ -121,37 +156,34 @@ def select_latest_by_true_time(
             "select_latest_by_true_time: no candidate files provided."
         )
 
-    best_path: str | None = None
-    best_dt: datetime | None = None
+    candidates: list[tuple[datetime, str]] = []
 
     for path in file_paths:
-        dt = extract_retrieved_utc(path)
-        if dt is None:
+        try:
+            dt = extract_retrieved_utc(path)
+            _log.debug(
+                "true-time selection: '%s' → retrieved_utc=%s", path, dt.isoformat()
+            )
+            candidates.append((dt, path))
+        except Exception as exc:
             _log.warning(
-                "true-time selection: skipping '%s' — could not extract "
-                "a valid retrieved_utc timestamp.",
-                path,
+                "true-time selection: skipping '%s' — %s", path, exc
             )
             continue
 
-        _log.debug(
-            "true-time selection: '%s' → retrieved_utc=%s", path, dt.isoformat()
-        )
-
-        if best_dt is None or dt > best_dt:
-            best_dt = dt
-            best_path = path
-
-    if best_path is None:
+    if not candidates:
         raise RuntimeError(
             "select_latest_by_true_time: no valid retrieved_utc timestamp "
             "found in any of the provided candidate files: "
             + ", ".join(repr(p) for p in file_paths)
         )
 
+    candidates.sort(key=lambda x: x[0])
+    best_dt, best_path = candidates[-1]
+
     _log.info(
         "true-time selection: selected '%s' (retrieved_utc=%s)",
         best_path,
-        best_dt.isoformat() if best_dt else "?",
+        best_dt.isoformat(),
     )
-    return best_path
+    return best_path, best_dt

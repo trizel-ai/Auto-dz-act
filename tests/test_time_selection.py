@@ -1,11 +1,13 @@
 """Tests for validation.core.time_selection.
 
 Covers:
-- extract_retrieved_utc: valid ISO-8601 (with Z, with offset, no tz),
-  missing field, invalid value, unreadable file, non-JSON-object content.
-- select_latest_by_true_time: correct selection by latest timestamp,
-  skipping invalid timestamps, error on empty list, error when no valid
-  candidates remain.
+- _normalize_to_utc: Z suffix, offset, naive timestamp rejection.
+- extract_retrieved_utc: valid ISO-8601 (with Z, with non-UTC offset),
+  missing field, invalid value, unreadable file, non-JSON-object content,
+  timezone-naive value rejection.
+- select_latest_by_true_time: correct selection by latest UTC timestamp,
+  timezone normalization across mixed offsets, skipping invalid files,
+  error on empty list, error when no valid candidates remain, tuple return.
 """
 
 import json
@@ -14,6 +16,7 @@ import os
 import sys
 import tempfile
 import unittest
+from datetime import timezone
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
@@ -62,17 +65,12 @@ def _write_text(text: str, suffix: str = ".json") -> str:
 class TestExtractRetrievedUtc(unittest.TestCase):
     """Unit tests for extract_retrieved_utc."""
 
-    def tearDown(self) -> None:
-        # Clean up any temp files created during a test.
-        pass  # individual tests use tempfile.NamedTemporaryFile; paths are stored
-
     # --- happy paths ---
 
     def test_parses_utc_z_suffix(self) -> None:
         path = _write_json({"retrieved_utc": "2026-03-20T12:00:00Z"})
         try:
             dt = extract_retrieved_utc(path)
-            self.assertIsNotNone(dt)
             self.assertEqual(dt.year, 2026)
             self.assertEqual(dt.month, 3)
             self.assertEqual(dt.day, 20)
@@ -84,26 +82,14 @@ class TestExtractRetrievedUtc(unittest.TestCase):
         path = _write_json({"retrieved_utc": "2026-03-20T12:00:00+00:00"})
         try:
             dt = extract_retrieved_utc(path)
-            self.assertIsNotNone(dt)
             self.assertEqual(dt.hour, 12)
         finally:
             os.unlink(path)
 
-    def test_parses_no_timezone_treats_as_utc(self) -> None:
-        path = _write_json({"retrieved_utc": "2026-03-18T08:30:00"})
-        try:
-            dt = extract_retrieved_utc(path)
-            self.assertIsNotNone(dt)
-            self.assertEqual(dt.hour, 8)
-        finally:
-            os.unlink(path)
-
     def test_result_is_timezone_aware(self) -> None:
-        from datetime import timezone
         path = _write_json({"retrieved_utc": "2026-03-20T00:00:00Z"})
         try:
             dt = extract_retrieved_utc(path)
-            self.assertIsNotNone(dt)
             self.assertIsNotNone(dt.tzinfo)
             self.assertEqual(dt.tzinfo, timezone.utc)
         finally:
@@ -114,61 +100,76 @@ class TestExtractRetrievedUtc(unittest.TestCase):
         path = _write_json({"retrieved_utc": "2026-03-20T14:00:00+02:00"})
         try:
             dt = extract_retrieved_utc(path)
-            self.assertIsNotNone(dt)
-            from datetime import timezone
             self.assertEqual(dt.tzinfo, timezone.utc)
             self.assertEqual(dt.hour, 12)
         finally:
             os.unlink(path)
 
-    # --- missing / invalid field ---
+    # --- timezone-naive timestamps are rejected ---
 
-    def test_missing_retrieved_utc_returns_none(self) -> None:
+    def test_naive_timestamp_raises_value_error(self) -> None:
+        path = _write_json({"retrieved_utc": "2026-03-18T08:30:00"})
+        try:
+            with self.assertRaises(ValueError):
+                extract_retrieved_utc(path)
+        finally:
+            os.unlink(path)
+
+    # --- missing / invalid field raises ---
+
+    def test_missing_retrieved_utc_raises_value_error(self) -> None:
         path = _write_json({"other_field": "value"})
         try:
-            self.assertIsNone(extract_retrieved_utc(path))
+            with self.assertRaises(ValueError):
+                extract_retrieved_utc(path)
         finally:
             os.unlink(path)
 
-    def test_empty_string_returns_none(self) -> None:
+    def test_empty_string_raises_value_error(self) -> None:
         path = _write_json({"retrieved_utc": ""})
         try:
-            self.assertIsNone(extract_retrieved_utc(path))
+            with self.assertRaises(ValueError):
+                extract_retrieved_utc(path)
         finally:
             os.unlink(path)
 
-    def test_non_string_value_returns_none(self) -> None:
+    def test_non_string_value_raises_value_error(self) -> None:
         path = _write_json({"retrieved_utc": 12345})
         try:
-            self.assertIsNone(extract_retrieved_utc(path))
+            with self.assertRaises(ValueError):
+                extract_retrieved_utc(path)
         finally:
             os.unlink(path)
 
-    def test_invalid_iso_format_returns_none(self) -> None:
+    def test_invalid_iso_format_raises_value_error(self) -> None:
         path = _write_json({"retrieved_utc": "not-a-date"})
         try:
-            self.assertIsNone(extract_retrieved_utc(path))
+            with self.assertRaises(ValueError):
+                extract_retrieved_utc(path)
         finally:
             os.unlink(path)
 
-    # --- invalid file content ---
+    # --- invalid file content raises ---
 
-    def test_non_object_json_returns_none(self) -> None:
+    def test_non_object_json_raises_value_error(self) -> None:
         path = _write_json(["a", "b"])
         try:
-            self.assertIsNone(extract_retrieved_utc(path))
+            with self.assertRaises(ValueError):
+                extract_retrieved_utc(path)
         finally:
             os.unlink(path)
 
-    def test_invalid_json_returns_none(self) -> None:
+    def test_invalid_json_raises_json_decode_error(self) -> None:
         path = _write_text("NOT JSON {{{")
         try:
-            self.assertIsNone(extract_retrieved_utc(path))
+            with self.assertRaises(json.JSONDecodeError):
+                extract_retrieved_utc(path)
         finally:
             os.unlink(path)
 
-    def test_nonexistent_file_returns_none(self) -> None:
-        self.assertIsNone(extract_retrieved_utc("/tmp/this_file_does_not_exist_xyz.json"))
+    def test_nonexistent_file_raises_os_error(self) -> None:
+        with self.assertRaises(OSError):
+            extract_retrieved_utc("/tmp/this_file_does_not_exist_xyz.json")
 
 
 # ---------------------------------------------------------------------------
@@ -199,38 +200,49 @@ class TestSelectLatestByTrueTime(unittest.TestCase):
         self._temp_files.append(path)
         return path
 
+    # --- return type ---
+
+    def test_returns_tuple_of_path_and_datetime(self) -> None:
+        only = self._make_file("2026-03-19T06:00:00Z")
+        result = select_latest_by_true_time([only], self.logger)
+        self.assertIsInstance(result, tuple)
+        self.assertEqual(len(result), 2)
+        path, dt = result
+        self.assertIsInstance(path, str)
+        self.assertIsNotNone(dt.tzinfo)
+
     # --- correct selection ---
 
     def test_selects_latest_among_two(self) -> None:
         older = self._make_file("2026-03-18T00:00:00Z")
         newer = self._make_file("2026-03-20T00:00:00Z")
-        result = select_latest_by_true_time([older, newer], self.logger)
-        self.assertEqual(result, newer)
+        path, _ = select_latest_by_true_time([older, newer], self.logger)
+        self.assertEqual(path, newer)
 
     def test_selects_latest_among_three(self) -> None:
         a = self._make_file("2026-03-18T00:00:00Z")
         b = self._make_file("2026-03-20T00:00:00Z")
         c = self._make_file("2026-03-21T12:00:00Z")
-        result = select_latest_by_true_time([a, b, c], self.logger)
-        self.assertEqual(result, c)
+        path, _ = select_latest_by_true_time([a, b, c], self.logger)
+        self.assertEqual(path, c)
 
     def test_order_of_paths_does_not_matter(self) -> None:
         older = self._make_file("2026-03-18T00:00:00Z")
         newer = self._make_file("2026-03-20T00:00:00Z")
         # Pass newer first to ensure it's not just returning the first element
-        result = select_latest_by_true_time([newer, older], self.logger)
-        self.assertEqual(result, newer)
+        path, _ = select_latest_by_true_time([newer, older], self.logger)
+        self.assertEqual(path, newer)
 
     def test_single_valid_file_is_returned(self) -> None:
         only = self._make_file("2026-03-19T06:00:00Z")
-        result = select_latest_by_true_time([only], self.logger)
-        self.assertEqual(result, only)
+        path, _ = select_latest_by_true_time([only], self.logger)
+        self.assertEqual(path, only)
 
     def test_skips_invalid_and_returns_valid(self) -> None:
         invalid = self._make_invalid_file()
         valid = self._make_file("2026-03-20T00:00:00Z")
-        result = select_latest_by_true_time([invalid, valid], self.logger)
-        self.assertEqual(result, valid)
+        path, _ = select_latest_by_true_time([invalid, valid], self.logger)
+        self.assertEqual(path, valid)
 
     def test_folder_date_does_not_influence_selection(self) -> None:
         """File in 'newer' folder but older retrieved_utc should lose."""
@@ -238,10 +250,30 @@ class TestSelectLatestByTrueTime(unittest.TestCase):
         # folder B is 2026-03-20, data is from 2026-03-20
         file_a = self._make_file("2026-03-18T00:00:00Z")
         file_b = self._make_file("2026-03-20T00:00:00Z")
-        # Without true-time, file_a (newer folder) would be returned;
-        # with true-time, file_b should win.
-        result = select_latest_by_true_time([file_a, file_b], self.logger)
-        self.assertEqual(result, file_b)
+        path, _ = select_latest_by_true_time([file_a, file_b], self.logger)
+        self.assertEqual(path, file_b)
+
+    def test_timezone_normalization(self) -> None:
+        """UTC normalization must occur before comparison.
+
+        f1: 2026-03-20T10:00:00+02:00  →  2026-03-20T08:00:00 UTC
+        f2: 2026-03-20T08:30:00+00:00  →  2026-03-20T08:30:00 UTC
+        f2 is later in UTC and should win.
+        """
+        f1 = self._make_file("2026-03-20T10:00:00+02:00")
+        f2 = self._make_file("2026-03-20T08:30:00+00:00")
+        selected, dt = select_latest_by_true_time([f1, f2], self.logger)
+        self.assertEqual(selected, f2)
+        self.assertEqual(dt.hour, 8)
+        self.assertEqual(dt.minute, 30)
+        self.assertEqual(dt.tzinfo, timezone.utc)
+
+    def test_returned_datetime_is_utc(self) -> None:
+        only = self._make_file("2026-03-19T06:00:00+02:00")
+        _, dt = select_latest_by_true_time([only], self.logger)
+        self.assertEqual(dt.tzinfo, timezone.utc)
+        # +02:00 → 04:00 UTC
+        self.assertEqual(dt.hour, 4)
 
     # --- error cases ---
 
@@ -258,8 +290,8 @@ class TestSelectLatestByTrueTime(unittest.TestCase):
     def test_works_without_logger(self) -> None:
         """Passing logger=None should not raise."""
         only = self._make_file("2026-03-19T06:00:00Z")
-        result = select_latest_by_true_time([only])
-        self.assertEqual(result, only)
+        path, _ = select_latest_by_true_time([only])
+        self.assertEqual(path, only)
 
 
 if __name__ == "__main__":
