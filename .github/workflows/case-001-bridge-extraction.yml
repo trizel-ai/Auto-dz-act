@@ -1,0 +1,155 @@
+# =============================================================================
+# TRIZEL Bridge – Workspace Bootstrap and Case Extraction
+# =============================================================================
+#
+# This workflow is the GitHub Actions execution path for TRIZEL bridge
+# activation.  It depends on governed registry entries and does not invent or
+# infer source paths.  The same pattern is reusable for future cases:
+#
+#   new case → registry entry → Action bootstrap → workspace resolve →
+#   extraction
+#
+# It does NOT bypass bridge or provenance rules, fetch arbitrary internet data,
+# synthesize data, or mark extraction successful when the case is still blocked.
+#
+# Required secret: TRIZEL_CROSS_REPO_READ_TOKEN
+#   A fine-grained Personal Access Token (read-only, Contents) that grants
+#   access to the cross-repository source checkouts below.  If the source
+#   repositories are public this secret may be omitted; providing it is
+#   harmless in either case.
+# =============================================================================
+
+name: "TRIZEL Bridge – Workspace Bootstrap and Case Extraction"
+
+on:
+  workflow_dispatch:
+    inputs:
+      case_id:
+        description: "Validation case ID to extract (e.g. case-001-asteroid)"
+        required: false
+        default: "case-001-asteroid"
+        type: string
+      run_extraction:
+        description: "Attempt bridge extraction after workspace validation"
+        required: false
+        default: "true"
+        type: boolean
+
+jobs:
+  bridge-extraction:
+    name: "Bridge extraction – ${{ inputs.case_id || 'case-001-asteroid' }}"
+    runs-on: ubuntu-latest
+
+    # Minimal GITHUB_TOKEN permissions: read-only access to repository contents.
+    # Cross-repository access is handled by TRIZEL_CROSS_REPO_READ_TOKEN.
+    permissions:
+      contents: read
+
+    env:
+      # Resolved once so every step uses a consistent value.
+      CASE_ID: ${{ inputs.case_id || 'case-001-asteroid' }}
+
+    steps:
+      # -------------------------------------------------------------------
+      # 1) Checkout the validation repository (trizel-ai/Auto-dz-act)
+      #    This is the current repository and uses the default GITHUB_TOKEN.
+      # -------------------------------------------------------------------
+      - name: "Checkout trizel-ai/Auto-dz-act"
+        uses: actions/checkout@v4
+        with:
+          repository: trizel-ai/Auto-dz-act
+          token: ${{ secrets.GITHUB_TOKEN }}
+          # Default path is $GITHUB_WORKSPACE – no 'path:' needed.
+
+      # -------------------------------------------------------------------
+      # 2) Checkout raw source repository into a sibling workspace directory
+      # -------------------------------------------------------------------
+      - name: "Checkout abdelkader-omran/AUTO-DZ-ACT-3I-ATLAS-DAILY"
+        uses: actions/checkout@v4
+        with:
+          repository: abdelkader-omran/AUTO-DZ-ACT-3I-ATLAS-DAILY
+          token: ${{ secrets.TRIZEL_CROSS_REPO_READ_TOKEN }}
+          path: "workspace/AUTO-DZ-ACT-3I-ATLAS-DAILY"
+
+      # -------------------------------------------------------------------
+      # 3) Checkout normalized source repository into a sibling workspace dir
+      # -------------------------------------------------------------------
+      - name: "Checkout abdelkader-omran/AUTO-DZ-ACT-ANALYSIS-3I-ATLAS"
+        uses: actions/checkout@v4
+        with:
+          repository: abdelkader-omran/AUTO-DZ-ACT-ANALYSIS-3I-ATLAS
+          token: ${{ secrets.TRIZEL_CROSS_REPO_READ_TOKEN }}
+          path: "workspace/AUTO-DZ-ACT-ANALYSIS-3I-ATLAS"
+
+      # -------------------------------------------------------------------
+      # 4) Set up Python runtime
+      # -------------------------------------------------------------------
+      - name: "Set up Python"
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # -------------------------------------------------------------------
+      # 5) Bootstrap workspace paths
+      #    Writes confirmed runner-local absolute paths into
+      #    validation/bridge/workspace/repositories.json so that the
+      #    extraction scripts find each repository without manual editing.
+      #    Fails the job if any required path cannot be confirmed.
+      # -------------------------------------------------------------------
+      - name: "Bootstrap workspace paths"
+        run: |
+          python validation/bridge/workspace/bootstrap_workspace.py \
+            --auto-dz-act  "$GITHUB_WORKSPACE" \
+            --atlas-daily  "$GITHUB_WORKSPACE/workspace/AUTO-DZ-ACT-3I-ATLAS-DAILY" \
+            --atlas-analysis "$GITHUB_WORKSPACE/workspace/AUTO-DZ-ACT-ANALYSIS-3I-ATLAS"
+
+      # -------------------------------------------------------------------
+      # 6) Validate workspace readiness (read-only guard)
+      #    Job stops immediately with exit code 1 if any required repository
+      #    is still unresolved.  No fallback, no partial success.
+      # -------------------------------------------------------------------
+      - name: "Validate workspace readiness"
+        run: |
+          python validation/bridge/workspace/resolve_workspace_paths.py
+
+      # -------------------------------------------------------------------
+      # 7) Attempt bridge extraction
+      #    Only runs when:
+      #      • workspace is resolved (previous step passed)
+      #      • run_extraction input is true (default)
+      #    The extraction script enforces its own guards:
+      #      • registry entry must be approved
+      #      • source paths must be declared and non-placeholder
+      #    If the case is still in pending_workspace_resolution or any
+      #    blocked state the script exits non-zero with a clear message.
+      # -------------------------------------------------------------------
+      - name: "Attempt bridge extraction for ${{ env.CASE_ID }}"
+        if: ${{ inputs.run_extraction != false }}
+        run: |
+          mkdir -p logs
+          python validation/bridge/extract_case_data.py \
+            --case     "${{ env.CASE_ID }}" \
+            --repo-root "$GITHUB_WORKSPACE" \
+            --log-file "logs/extraction-${{ env.CASE_ID }}.log"
+
+      # -------------------------------------------------------------------
+      # 8) Upload extraction artifacts (always runs so failures are visible)
+      #    Includes: log, case directory outputs, provenance, manifest.
+      #    If extraction was blocked the failure log is uploaded instead.
+      # -------------------------------------------------------------------
+      - name: "Upload extraction artifacts"
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: "extraction-artifacts-${{ env.CASE_ID }}"
+          path: |
+            logs/
+            validation/cases/${{ env.CASE_ID }}/provenance.json
+            validation/cases/${{ env.CASE_ID }}/manifest.json
+            validation/cases/${{ env.CASE_ID }}/raw/
+            validation/cases/${{ env.CASE_ID }}/normalized/
+          if-no-files-found: warn
+          # 'warn' rather than 'error': when run_extraction is false (or step 7
+          # is skipped) the logs/ directory may not exist, and case directories
+          # will have no new content.  A warning keeps the upload step green so
+          # the overall result reflects only real extraction failures.
