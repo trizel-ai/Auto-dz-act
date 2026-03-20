@@ -11,45 +11,70 @@ It is designed to validate:
 - repository-to-layer mapping
 - epistemic consistency
 
-## Source Type
+## Source Repositories
 
-Pipeline output from AUTO-DZ-ACT-ANALYSIS-3I-ATLAS (TRIZEL production/analysis repository).
+| Role | Repository |
+|------|------------|
+| Raw data (Step A) | `abdelkader-omran/AUTO-DZ-ACT-3I-ATLAS-DAILY` |
+| Normalized data (Step B) | `abdelkader-omran/AUTO-DZ-ACT-ANALYSIS-3I-ATLAS` |
+
+## Extraction Path
+
+```
+AUTO-DZ-ACT-3I-ATLAS-DAILY     → raw/
+AUTO-DZ-ACT-ANALYSIS-3I-ATLAS  → normalized/
+```
+
+No mixing. No inversion. No shared paths between raw and normalized extraction.
 
 ## Source Extraction Status
 
-**PENDING — data population blocked.**
+**PENDING WORKSPACE RESOLUTION — extraction blocked.**
 
-The source repository (AUTO-DZ-ACT-ANALYSIS-3I-ATLAS) is not accessible from the current repository-visible context.
+The source repositories are declared in the bridge registry and workspace configuration.
+Extraction cannot proceed until:
+
+1. `validation/bridge/workspace/bootstrap_workspace.py` confirms all repository paths.
+2. `validation/bridge/workspace/resolve_workspace_paths.py` reports:
+   `ALL REQUIRED REPOSITORIES ARE RESOLVED`
 
 Population of `raw/` and `normalized/` has not occurred.
 
 No synthetic, placeholder, or externally-sourced data has been introduced.
 
-This case will be populated once real source data from AUTO-DZ-ACT-ANALYSIS-3I-ATLAS is safely accessible and explicitly traceable.
-
 ## Files Added
 
-None. `raw/` and `normalized/` remain unpopulated.
+None. `raw/` and `normalized/` remain unpopulated pending workspace resolution.
 
-## Transformation Path
+## Extraction Pipeline
 
 ```
-raw/                     ← PENDING: real source data from AUTO-DZ-ACT-ANALYSIS-3I-ATLAS
-  → normalized/          ← PENDING: derived from raw/ only, no hidden logic
-  → artifact.json        ← PENDING: artifact record
-  → provenance.json      ← PENDING: explicit origin and processing chain
-  → manifest.json        ← PENDING: real file inventory with hashes
-  → epistemic_state.json ← PENDING: state classification
+bootstrap_workspace.py          ← resolve local paths for all required repos
+  → resolve_workspace_paths.py  ← confirm all repos present (exit 0)
+  → extract_case_data.py        ← Step A: DAILY → raw/
+                                   Step B: ANALYSIS → normalized/
+  → provenance.json             ← dual-source lineage recorded
+  → manifest.json               ← real file inventory with sha256
+  → artifact.json               ← status: extraction_complete
+  → epistemic_state.json        ← state: extracted_raw_and_normalized
 ```
 
 ## Current Validation State
 
-- Raw data: not present
-- Normalized data: not present
-- Manifest: updated to reflect pending state
-- Provenance: updated to reflect pending state
-- Artifact: updated to reflect pending state
-- Epistemic state: `source_extraction_pending`
+- Raw data: not present (pending workspace resolution)
+- Normalized data: not present (pending workspace resolution)
+- Manifest: configured, pending population
+- Provenance: dual-source lineage declared, pending extraction
+- Artifact: pending workspace resolution
+- Epistemic state: `pending_workspace_resolution`
+
+## Governance
+
+Extraction governed by:
+
+- `validation/bridge/bridge_rules.md`
+- `validation/bridge/registry.json`
+- `validation/bridge/workspace/WORKSPACE_RULES.md`
 
 ## Scope
 
@@ -65,17 +90,17 @@ Layer-1 (Execution)
 
 ## Repository
 
-Auto-dz-act
+trizel-ai/Auto-dz-act
 
 ## Structure
 
 ```
 case-001-asteroid/
-├── raw/                  ← PENDING: real asteroid source data
-├── normalized/           ← PENDING: derived from raw/
+├── raw/                  ← populated from AUTO-DZ-ACT-3I-ATLAS-DAILY (pending)
+├── normalized/           ← populated from AUTO-DZ-ACT-ANALYSIS-3I-ATLAS (pending)
 ├── manifest.json         ← file registry (pending population)
-├── provenance.json       ← lineage (pending population)
-├── artifact.json         ← structured output definition (pending population)
+├── provenance.json       ← dual-source lineage (declared, pending extraction)
+├── artifact.json         ← structured output definition (pending extraction)
 ├── epistemic_state.json  ← classification of epistemic state
 └── README.md             ← structural description (no interpretation)
 ```
