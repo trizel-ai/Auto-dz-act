@@ -31,10 +31,13 @@ from validation.bridge.extract_case_data import (
     EXTRACTION_METHOD,
     STRATEGY_LATEST_DAILY_OBSERVATION,
     STRATEGY_LATEST_ANALYSIS_NORMALIZED,
+    STRATEGY_LATEST_BY_TRUE_TIME,
     _is_placeholder,
     _is_dual_source_entry,
     _is_iso_date_dir,
     _find_latest_matching_file,
+    _collect_candidate_files,
+    _maybe_select_by_true_time,
     resolve_source_strategy,
     validate_entry_status,
     _validate_source_paths,
@@ -1439,6 +1442,30 @@ class TestResolveSourceStrategy(unittest.TestCase):
                     "unknown_strategy", tmpdir, self.logger
                 )
             self.assertIn("Unknown source strategy", str(ctx.exception))
+
+    def test_latest_by_true_time_returns_path_of_latest_retrieved_utc(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # File A: folder date 2026-03-21 but older retrieved_utc
+            path_a = os.path.join(tmpdir, "observations", "2026-03-21")
+            os.makedirs(path_a, exist_ok=True)
+            with open(os.path.join(path_a, "observation.json"), "w") as f:
+                json.dump({"retrieved_utc": "2026-03-18T00:00:00Z"}, f)
+            # File B: folder date 2026-03-20 but newer retrieved_utc
+            path_b = os.path.join(tmpdir, "observations", "2026-03-20")
+            os.makedirs(path_b, exist_ok=True)
+            with open(os.path.join(path_b, "observation.json"), "w") as f:
+                json.dump({"retrieved_utc": "2026-03-20T00:00:00Z"}, f)
+            result = resolve_source_strategy(
+                STRATEGY_LATEST_BY_TRUE_TIME, tmpdir, self.logger
+            )
+        self.assertEqual(result, "observations/2026-03-20/observation.json")
+
+    def test_latest_by_true_time_no_candidates_raises_runtime_error(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with self.assertRaises(RuntimeError):
+                resolve_source_strategy(
+                    STRATEGY_LATEST_BY_TRUE_TIME, tmpdir, self.logger
+                )
 
 
 # ---------------------------------------------------------------------------
