@@ -1,0 +1,8 @@
+{
+  "case_id": "case-002",
+  "phenomenon": "comet",
+  "framework_version": "1.0",
+  "outputs": {},
+  "status": "scaffolded",
+  "_note": "Populated incrementally in follow-up commits."
+}

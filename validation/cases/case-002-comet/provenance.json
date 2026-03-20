@@ -1,0 +1,12 @@
+{
+  "case_id": "case-002",
+  "phenomenon": "comet",
+  "repository": "https://github.com/trizel-ai/Auto-dz-act",
+  "layer": "Layer-1",
+  "source": null,
+  "doi": null,
+  "governance_path": "GOVERNANCE.md",
+  "lineage": [],
+  "status": "scaffolded",
+  "_note": "Populated incrementally in follow-up commits."
+}
