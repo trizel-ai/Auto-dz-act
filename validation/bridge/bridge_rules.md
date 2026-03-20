@@ -87,6 +87,8 @@ The provenance update must be atomic with the file copy.  A partial extraction
 If any of the following conditions are detected, extraction must stop
 immediately and exit with a non-zero status:
 
+- The local workspace has not been resolved successfully (see
+  `workspace/resolve_workspace_paths.py`)
 - The source repository path is not accessible in the local context
 - The source file path declared in the registry does not exist
 - The declared path is not repository-visible (e.g. outside working tree)

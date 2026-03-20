@@ -83,6 +83,25 @@ rejected by the extraction script.
 
 ---
 
+## Workspace Resolution Prerequisite
+
+Before any extraction can proceed, the local multi-repository workspace must
+be resolved.  This means all source repositories declared in
+`workspace/repositories.json` must be locally visible at their declared paths.
+
+Run the workspace readiness checker first:
+
+    python validation/bridge/workspace/resolve_workspace_paths.py
+
+Extraction is **blocked** if this check does not exit with status 0.  Source
+repositories that are absent or declared only as placeholders prevent
+extraction from starting.
+
+See `workspace/README.md` and `workspace/WORKSPACE_RULES.md` for the full
+specification of the workspace model.
+
+---
+
 ## Components
 
 | File | Role |
@@ -91,6 +110,7 @@ rejected by the extraction script.
 | `bridge_rules.md` | Strict operational rules for all extractions |
 | `registry.json` | Controlled source-to-case mapping |
 | `extract_case_data.py` | Extraction script (reads registry, copies files, updates provenance) |
+| `workspace/` | Local multi-repository workspace model (readiness checker, rules, registry) |
 
 ---
 
