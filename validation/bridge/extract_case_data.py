@@ -43,6 +43,13 @@ Strategy mode (controlled discovery):
         ``public/observations/YYYY-MM-DD/normalized_observation.json``
         inside the ANALYSIS repository root.
 
+    ``latest_by_true_time``
+        Scans a set of candidate files, reads their ``retrieved_utc``
+        timestamp, and returns the path of the file with the latest
+        timestamp.  Candidate files are collected by
+        :func:`_collect_candidate_files`.  Selection is delegated to
+        :func:`validation.core.time_selection.select_latest_by_true_time`.
+
     Strategy resolution is deterministic (latest ISO date wins), auditable,
     and limited to date-named directories only.  The actual discovered path
     is recorded in provenance exactly as explicit-path mode would.
@@ -60,6 +67,8 @@ import shutil
 import sys
 from datetime import datetime, timezone
 from typing import Any
+
+from validation.core.time_selection import select_latest_by_true_time
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -80,6 +89,8 @@ _STATUS_CONFIRMED = "confirmed"
 # Strategy identifiers for controlled latest-date discovery.
 STRATEGY_LATEST_DAILY_OBSERVATION = "latest_daily_observation"
 STRATEGY_LATEST_ANALYSIS_NORMALIZED = "latest_analysis_normalized_observation"
+# Strategy identifier for true-time (retrieved_utc) based selection.
+STRATEGY_LATEST_BY_TRUE_TIME = "latest_by_true_time"
 
 
 # ---------------------------------------------------------------------------
@@ -511,6 +522,99 @@ def _find_latest_matching_file(
     return f"{subdir}/{latest}/{filename}"
 
 
+def _collect_candidate_files(
+    base_dir: str, subdir: str, filename: str
+) -> list[str]:
+    """Collect all absolute paths matching *base_dir*/*subdir*/YYYY-MM-DD/*filename*.
+
+    Unlike :func:`_find_latest_matching_file`, this function returns the full
+    list of candidate file paths rather than selecting the latest one by folder
+    date.  The list is used by :func:`_maybe_select_by_true_time` to perform
+    selection based on ``retrieved_utc`` timestamps embedded in the files.
+
+    Parameters
+    ----------
+    base_dir:
+        Absolute root of the source repository checkout.
+    subdir:
+        Repository-relative parent directory to scan.
+    filename:
+        Exact filename to look for inside each date directory.
+
+    Returns
+    -------
+    list[str]
+        Sorted list of absolute file paths found.  Empty when none exist.
+    """
+    parent = os.path.join(base_dir, subdir)
+    if not os.path.isdir(parent):
+        return []
+
+    results: list[str] = []
+    try:
+        entries = os.scandir(parent)
+    except OSError:
+        return []
+
+    with entries:
+        for entry in entries:
+            if entry.is_dir() and _is_iso_date_dir(entry.name):
+                candidate = os.path.join(entry.path, filename)
+                if os.path.isfile(candidate):
+                    results.append(candidate)
+
+    return sorted(results)
+
+
+def _maybe_select_by_true_time(
+    candidates: list[str],
+    repo_root: str,
+    strategy: str,
+    logger: logging.Logger,
+) -> str:
+    """Select the best candidate file using true-time (``retrieved_utc``) logic.
+
+    Delegates to :func:`validation.core.time_selection.select_latest_by_true_time`
+    and converts the returned absolute path to a repository-relative path.
+
+    Parameters
+    ----------
+    candidates:
+        Absolute paths of candidate files, as returned by
+        :func:`_collect_candidate_files`.
+    repo_root:
+        Absolute local path to the relevant repository checkout.  Used to
+        compute the repository-relative return value.
+    strategy:
+        Strategy name used only for log/error messages.
+    logger:
+        Active logger for audit output.
+
+    Returns
+    -------
+    str
+        Repository-relative path of the selected file.
+
+    Raises
+    ------
+    RuntimeError
+        If no candidate carries a valid ``retrieved_utc`` timestamp.
+    """
+    if not candidates:
+        raise RuntimeError(
+            f"Strategy '{strategy}': no candidate files found."
+        )
+
+    abs_path = select_latest_by_true_time(candidates, logger)
+    rel_path = os.path.relpath(abs_path, repo_root)
+    # Normalise path separators to forward slashes for portability.
+    rel_path = rel_path.replace(os.sep, "/")
+    logger.info(
+        "Strategy '%s': true-time selection resolved to '%s'", strategy, rel_path
+    )
+    return rel_path
+
+
 def resolve_source_strategy(
     strategy: str, repo_root: str, logger: logging.Logger
 ) -> str:
@@ -526,6 +630,11 @@ def resolve_source_strategy(
         Returns the newest
         ``public/observations/YYYY-MM-DD/normalized_observation.json``
         found under *repo_root*.  Intended for the ANALYSIS repository.
+
+    ``latest_by_true_time``
+        Collects all ``observations/YYYY-MM-DD/observation.json`` candidate
+        files under *repo_root* and returns the path of the one whose
+        ``retrieved_utc`` timestamp is the latest.  Folder date is ignored.
 
     Parameters
     ----------
@@ -578,10 +687,17 @@ def resolve_source_strategy(
         )
         return rel_path
 
+    if strategy == STRATEGY_LATEST_BY_TRUE_TIME:
+        candidates = _collect_candidate_files(
+            repo_root, "observations", "observation.json"
+        )
+        return _maybe_select_by_true_time(candidates, repo_root, strategy, logger)
+
     raise ValueError(
         f"Unknown source strategy: '{strategy}'. "
         f"Supported strategies: {STRATEGY_LATEST_DAILY_OBSERVATION!r}, "
-        f"{STRATEGY_LATEST_ANALYSIS_NORMALIZED!r}."
+        f"{STRATEGY_LATEST_ANALYSIS_NORMALIZED!r}, "
+        f"{STRATEGY_LATEST_BY_TRUE_TIME!r}."
     )
 
 
