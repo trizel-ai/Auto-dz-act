@@ -126,8 +126,14 @@ def extract_retrieved_utc(file_path: str) -> datetime:
 def select_latest_by_true_time(
     file_paths: Sequence[str],
     logger: logging.Logger | None = None,
-) -> tuple[str, datetime]:
-    """Return the path and UTC timestamp of the file with the latest retrieved_utc.
+) -> tuple[str, datetime, int, int]:
+    """Return the path, UTC timestamp, invalid count, and total count.
+
+    Evaluates each candidate file for a valid ``retrieved_utc`` timestamp.
+    All timestamps are normalised to UTC before comparison.  Files whose
+    ``retrieved_utc`` field is missing, malformed, or timezone-naive are
+    counted as invalid and skipped with a warning — they are never silently
+    discarded without a trace.
 
     Parameters
     ----------
@@ -139,9 +145,16 @@ def select_latest_by_true_time(
 
     Returns
     -------
-    (path, utc_datetime)
-        A tuple of the winning file path and its UTC
-        :class:`~datetime.datetime`.
+    (path, utc_datetime, invalid_count, total_count)
+        A four-element tuple:
+
+        * ``path`` — absolute path of the selected (latest) file.
+        * ``utc_datetime`` — UTC-normalised :class:`~datetime.datetime` of
+          the selected file's ``retrieved_utc`` field.
+        * ``invalid_count`` — number of candidate files that could not be
+          evaluated (missing field, bad format, or timezone-naive timestamp).
+        * ``total_count`` — total number of candidate files examined
+          (``valid_count + invalid_count``).
 
     Raises
     ------
@@ -156,6 +169,8 @@ def select_latest_by_true_time(
             "select_latest_by_true_time: no candidate files provided."
         )
 
+    total_count = len(file_paths)
+    invalid_count = 0
     candidates: list[tuple[datetime, str]] = []
 
     for path in file_paths:
@@ -166,6 +181,7 @@ def select_latest_by_true_time(
             )
             candidates.append((dt, path))
         except Exception as exc:
+            invalid_count += 1
             _log.warning(
                 "true-time selection: skipping '%s' — %s", path, exc
             )
@@ -182,8 +198,11 @@ def select_latest_by_true_time(
     best_dt, best_path = candidates[-1]
 
     _log.info(
-        "true-time selection: selected '%s' (retrieved_utc=%s)",
+        "true-time selection: selected '%s' (retrieved_utc=%s, "
+        "invalid=%d total=%d)",
         best_path,
         best_dt.isoformat(),
+        invalid_count,
+        total_count,
     )
-    return best_path, best_dt
+    return best_path, best_dt, invalid_count, total_count

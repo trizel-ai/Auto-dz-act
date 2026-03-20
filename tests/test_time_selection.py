@@ -206,8 +206,8 @@ class TestSelectLatestByTrueTime(unittest.TestCase):
         only = self._make_file("2026-03-19T06:00:00Z")
         result = select_latest_by_true_time([only], self.logger)
         self.assertIsInstance(result, tuple)
-        self.assertEqual(len(result), 2)
-        path, dt = result
+        self.assertEqual(len(result), 4)
+        path, dt, invalid_count, total_count = result
         self.assertIsInstance(path, str)
         self.assertIsNotNone(dt.tzinfo)
 
@@ -216,32 +216,32 @@ class TestSelectLatestByTrueTime(unittest.TestCase):
     def test_selects_latest_among_two(self) -> None:
         older = self._make_file("2026-03-18T00:00:00Z")
         newer = self._make_file("2026-03-20T00:00:00Z")
-        path, _ = select_latest_by_true_time([older, newer], self.logger)
+        path, _, _, _ = select_latest_by_true_time([older, newer], self.logger)
         self.assertEqual(path, newer)
 
     def test_selects_latest_among_three(self) -> None:
         a = self._make_file("2026-03-18T00:00:00Z")
         b = self._make_file("2026-03-20T00:00:00Z")
         c = self._make_file("2026-03-21T12:00:00Z")
-        path, _ = select_latest_by_true_time([a, b, c], self.logger)
+        path, _, _, _ = select_latest_by_true_time([a, b, c], self.logger)
         self.assertEqual(path, c)
 
     def test_order_of_paths_does_not_matter(self) -> None:
         older = self._make_file("2026-03-18T00:00:00Z")
         newer = self._make_file("2026-03-20T00:00:00Z")
         # Pass newer first to ensure it's not just returning the first element
-        path, _ = select_latest_by_true_time([newer, older], self.logger)
+        path, _, _, _ = select_latest_by_true_time([newer, older], self.logger)
         self.assertEqual(path, newer)
 
     def test_single_valid_file_is_returned(self) -> None:
         only = self._make_file("2026-03-19T06:00:00Z")
-        path, _ = select_latest_by_true_time([only], self.logger)
+        path, _, _, _ = select_latest_by_true_time([only], self.logger)
         self.assertEqual(path, only)
 
     def test_skips_invalid_and_returns_valid(self) -> None:
         invalid = self._make_invalid_file()
         valid = self._make_file("2026-03-20T00:00:00Z")
-        path, _ = select_latest_by_true_time([invalid, valid], self.logger)
+        path, _, _, _ = select_latest_by_true_time([invalid, valid], self.logger)
         self.assertEqual(path, valid)
 
     def test_folder_date_does_not_influence_selection(self) -> None:
@@ -250,7 +250,7 @@ class TestSelectLatestByTrueTime(unittest.TestCase):
         # folder B is 2026-03-20, data is from 2026-03-20
         file_a = self._make_file("2026-03-18T00:00:00Z")
         file_b = self._make_file("2026-03-20T00:00:00Z")
-        path, _ = select_latest_by_true_time([file_a, file_b], self.logger)
+        path, _, _, _ = select_latest_by_true_time([file_a, file_b], self.logger)
         self.assertEqual(path, file_b)
 
     def test_timezone_normalization(self) -> None:
@@ -262,7 +262,7 @@ class TestSelectLatestByTrueTime(unittest.TestCase):
         """
         f1 = self._make_file("2026-03-20T10:00:00+02:00")
         f2 = self._make_file("2026-03-20T08:30:00+00:00")
-        selected, dt = select_latest_by_true_time([f1, f2], self.logger)
+        selected, dt, _, _ = select_latest_by_true_time([f1, f2], self.logger)
         self.assertEqual(selected, f2)
         self.assertEqual(dt.hour, 8)
         self.assertEqual(dt.minute, 30)
@@ -270,10 +270,35 @@ class TestSelectLatestByTrueTime(unittest.TestCase):
 
     def test_returned_datetime_is_utc(self) -> None:
         only = self._make_file("2026-03-19T06:00:00+02:00")
-        _, dt = select_latest_by_true_time([only], self.logger)
+        _, dt, _, _ = select_latest_by_true_time([only], self.logger)
         self.assertEqual(dt.tzinfo, timezone.utc)
         # +02:00 → 04:00 UTC
         self.assertEqual(dt.hour, 4)
+
+    # --- invalid_count and total_count ---
+
+    def test_invalid_count_is_zero_when_all_valid(self) -> None:
+        a = self._make_file("2026-03-18T00:00:00Z")
+        b = self._make_file("2026-03-20T00:00:00Z")
+        _, _, invalid_count, total_count = select_latest_by_true_time(
+            [a, b], self.logger
+        )
+        self.assertEqual(invalid_count, 0)
+        self.assertEqual(total_count, 2)
+
+    def test_invalid_count_tracks_missing_retrieved_utc(self) -> None:
+        invalid = self._make_invalid_file()
+        valid = self._make_file("2026-03-20T00:00:00Z")
+        _, _, invalid_count, total_count = select_latest_by_true_time(
+            [invalid, valid], self.logger
+        )
+        self.assertEqual(invalid_count, 1)
+        self.assertEqual(total_count, 2)
+
+    def test_total_count_equals_input_length(self) -> None:
+        files = [self._make_file(f"2026-03-{d:02d}T00:00:00Z") for d in [15, 16, 17]]
+        _, _, _, total_count = select_latest_by_true_time(files, self.logger)
+        self.assertEqual(total_count, 3)
 
     # --- error cases ---
 
@@ -290,7 +315,7 @@ class TestSelectLatestByTrueTime(unittest.TestCase):
     def test_works_without_logger(self) -> None:
         """Passing logger=None should not raise."""
         only = self._make_file("2026-03-19T06:00:00Z")
-        path, _ = select_latest_by_true_time([only])
+        path, _, _, _ = select_latest_by_true_time([only])
         self.assertEqual(path, only)
 
 
