@@ -16,7 +16,8 @@
       "allowed_transformations": [],
       "target_case_raw_dir": "validation/cases/case-001-asteroid/raw",
       "target_case_normalized_dir": "validation/cases/case-001-asteroid/normalized",
-      "extraction_status": "pending_workspace_resolution",
+      "extraction_status": "approved",
+      "approval_note": "Workspace resolved and required source repositories confirmed. Controlled bridge extraction authorized for case-001-asteroid.",
       "governance_reference": "validation/bridge/bridge_rules.md",
       "notes": "Dual-source extraction. Raw data comes exclusively from AUTO-DZ-ACT-3I-ATLAS-DAILY; normalized data comes exclusively from AUTO-DZ-ACT-ANALYSIS-3I-ATLAS. No mixing. No inversion. Extraction blocked until workspace is fully resolved and source paths are confirmed. No synthetic paths have been invented."
     }
