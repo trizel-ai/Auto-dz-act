@@ -15,9 +15,9 @@ extract_retrieved_utc(file_path)
     any error so that callers can handle failure explicitly.
 
 select_latest_by_true_time(file_paths, logger=None)
-    Given a collection of candidate file paths, return ``(path, utc_datetime)``
-    for the file whose ``retrieved_utc`` timestamp is the latest.  Invalid
-    files are skipped with a warning.
+    Given a collection of candidate file paths, return a structured selection
+    record (dict) for the file whose ``retrieved_utc`` timestamp is the latest.
+    Invalid files are skipped with a warning.
 
 Design notes
 ------------
@@ -126,8 +126,8 @@ def extract_retrieved_utc(file_path: str) -> datetime:
 def select_latest_by_true_time(
     file_paths: Sequence[str],
     logger: logging.Logger | None = None,
-) -> tuple[str, datetime, int, int]:
-    """Return the path, UTC timestamp, invalid count, and total count.
+) -> dict:
+    """Return a structured selection record for the latest-by-true-time file.
 
     Evaluates each candidate file for a valid ``retrieved_utc`` timestamp.
     All timestamps are normalised to UTC before comparison.  Files whose
@@ -145,16 +145,19 @@ def select_latest_by_true_time(
 
     Returns
     -------
-    (path, utc_datetime, invalid_count, total_count)
-        A four-element tuple:
+    dict
+        A structured selection record with the following keys:
 
         * ``path`` — absolute path of the selected (latest) file.
-        * ``utc_datetime`` — UTC-normalised :class:`~datetime.datetime` of
-          the selected file's ``retrieved_utc`` field.
-        * ``invalid_count`` — number of candidate files that could not be
-          evaluated (missing field, bad format, or timezone-naive timestamp).
-        * ``total_count`` — total number of candidate files examined
-          (``valid_count + invalid_count``).
+        * ``selected_retrieved_utc`` — UTC-normalised
+          :class:`~datetime.datetime` of the selected file's
+          ``retrieved_utc`` field.
+        * ``invalid_candidates`` — number of candidate files that could not
+          be evaluated (missing field, bad format, or timezone-naive
+          timestamp).
+        * ``total_candidates`` — total number of candidate files examined
+          (``valid_count + invalid_candidates``).
+        * ``selection_method`` — always ``"latest_by_true_time"``.
 
     Raises
     ------
@@ -205,4 +208,10 @@ def select_latest_by_true_time(
         invalid_count,
         total_count,
     )
-    return best_path, best_dt, invalid_count, total_count
+    return {
+        "path": best_path,
+        "selected_retrieved_utc": best_dt,
+        "invalid_candidates": invalid_count,
+        "total_candidates": total_count,
+        "selection_method": "latest_by_true_time",
+    }
