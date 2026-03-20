@@ -1,0 +1,33 @@
+{
+  "workspace_version": "1.0",
+  "description": "Declarative local workspace registry for the TRIZEL validation bridge. Every repository required for bridge execution must be declared here. No repository may be used unless listed. No path is invented; pending entries use explicit placeholder values.",
+  "repositories": [
+    {
+      "repository": "trizel-ai/Auto-dz-act",
+      "role": "validation_repository",
+      "description": "Controlled validation reconstruction repository. Bridge execution originates here.",
+      "expected_local_path": "PLACEHOLDER: confirm absolute local path to trizel-ai/Auto-dz-act checkout",
+      "local_path_status": "pending",
+      "visibility_required": true,
+      "layer": "Layer-1"
+    },
+    {
+      "repository": "abdelkader-omran/AUTO-DZ-ACT-3I-ATLAS-DAILY",
+      "role": "raw_source_repository",
+      "description": "Raw immutable source repository. Provides unprocessed observational data for extraction.",
+      "expected_local_path": "PLACEHOLDER: confirm absolute local path to AUTO-DZ-ACT-3I-ATLAS-DAILY checkout",
+      "local_path_status": "pending",
+      "visibility_required": true,
+      "layer": "Layer-1"
+    },
+    {
+      "repository": "abdelkader-omran/AUTO-DZ-ACT-ANALYSIS-3I-ATLAS",
+      "role": "normalized_source_repository",
+      "description": "Normalised / epistemic / processed source repository. Provides analysis outputs for extraction.",
+      "expected_local_path": "PLACEHOLDER: confirm absolute local path to AUTO-DZ-ACT-ANALYSIS-3I-ATLAS checkout",
+      "local_path_status": "pending",
+      "visibility_required": true,
+      "layer": "Layer-1"
+    }
+  ]
+}
