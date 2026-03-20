@@ -38,6 +38,7 @@ from validation.bridge.extract_case_data import (
     extract_files,
     extract_dual_source_files,
     check_workspace_readiness,
+    _get_repo_local_path,
     update_provenance,
     update_dual_source_provenance,
     load_registry,
@@ -262,7 +263,7 @@ class TestValidateDualSourceEntry(unittest.TestCase):
             "extraction_status": "pending",
         }
         with self.assertRaises(RuntimeError):
-            validate_dual_source_entry(entry, "/tmp", self.logger)
+            validate_dual_source_entry(entry, "/tmp", "/tmp", self.logger)
 
     def test_approved_with_valid_paths_returns_both_lists(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -280,7 +281,7 @@ class TestValidateDualSourceEntry(unittest.TestCase):
                 "extraction_status": "approved",
             }
             raw_paths, norm_paths = validate_dual_source_entry(
-                entry, tmpdir, self.logger
+                entry, tmpdir, tmpdir, self.logger
             )
         self.assertEqual(raw_paths, ["raw.csv"])
         self.assertEqual(norm_paths, ["norm.csv"])
@@ -563,6 +564,167 @@ class TestCheckWorkspaceReadiness(unittest.TestCase):
                 os.unlink(ws_path)
 
 
+
+# ---------------------------------------------------------------------------
+# _get_repo_local_path
+# ---------------------------------------------------------------------------
+
+class TestGetRepoLocalPath(unittest.TestCase):
+    def _write_workspace(self, entries: list[dict]) -> str:
+        data = {"workspace_version": "1.0", "repositories": entries}
+        return _write_json(data)
+
+    def test_returns_confirmed_path(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            ws = self._write_workspace([
+                {
+                    "repository": "org/repo",
+                    "expected_local_path": tmpdir,
+                    "local_path_status": "confirmed",
+                    "visibility_required": True,
+                }
+            ])
+            try:
+                result = _get_repo_local_path(ws, "org/repo")
+                self.assertEqual(result, tmpdir)
+            finally:
+                os.unlink(ws)
+
+    def test_missing_repo_raises_key_error(self):
+        ws = self._write_workspace([])
+        try:
+            with self.assertRaises(KeyError):
+                _get_repo_local_path(ws, "org/nonexistent")
+        finally:
+            os.unlink(ws)
+
+    def test_placeholder_path_raises_runtime_error(self):
+        ws = self._write_workspace([
+            {
+                "repository": "org/repo",
+                "expected_local_path": "PLACEHOLDER: not yet confirmed",
+                "local_path_status": "pending",
+                "visibility_required": True,
+            }
+        ])
+        try:
+            with self.assertRaises(RuntimeError):
+                _get_repo_local_path(ws, "org/repo")
+        finally:
+            os.unlink(ws)
+
+    def test_unconfirmed_status_raises_runtime_error(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            ws = self._write_workspace([
+                {
+                    "repository": "org/repo",
+                    "expected_local_path": tmpdir,
+                    "local_path_status": "pending",
+                    "visibility_required": True,
+                }
+            ])
+            try:
+                with self.assertRaises(RuntimeError):
+                    _get_repo_local_path(ws, "org/repo")
+            finally:
+                os.unlink(ws)
+
+
+# ---------------------------------------------------------------------------
+# validate_dual_source_entry – cross-repo paths
+# ---------------------------------------------------------------------------
+
+class TestValidateDualSourceEntryCrossRepo(unittest.TestCase):
+    """Verify that raw and normalized paths are resolved in separate roots."""
+
+    def setUp(self):
+        self.logger = _make_logger()
+
+    def test_raw_and_normalized_resolved_against_separate_roots(self):
+        with tempfile.TemporaryDirectory() as raw_root, \
+                tempfile.TemporaryDirectory() as norm_root:
+            # Place each file only in its own root to ensure separate resolution.
+            with open(os.path.join(raw_root, "obs.json"), "w") as f:
+                f.write("{}")
+            with open(os.path.join(norm_root, "norm.json"), "w") as f:
+                f.write("{}")
+            entry = {
+                "case_id": "test-cross",
+                "raw_source_repository": "org/DAILY",
+                "normalized_source_repository": "org/ANALYSIS",
+                "allowed_raw_source_paths": ["obs.json"],
+                "allowed_normalized_source_paths": ["norm.json"],
+                "extraction_status": "approved",
+            }
+            raw_paths, norm_paths = validate_dual_source_entry(
+                entry, raw_root, norm_root, self.logger
+            )
+            self.assertEqual(raw_paths, ["obs.json"])
+            self.assertEqual(norm_paths, ["norm.json"])
+
+    def test_raw_path_missing_in_raw_root_raises(self):
+        with tempfile.TemporaryDirectory() as raw_root, \
+                tempfile.TemporaryDirectory() as norm_root:
+            # raw file missing; should fail even if it existed in norm_root.
+            with open(os.path.join(norm_root, "obs.json"), "w") as f:
+                f.write("{}")
+            entry = {
+                "case_id": "test-cross",
+                "raw_source_repository": "org/DAILY",
+                "normalized_source_repository": "org/ANALYSIS",
+                "allowed_raw_source_paths": ["obs.json"],
+                "allowed_normalized_source_paths": ["obs.json"],
+                "extraction_status": "approved",
+            }
+            with self.assertRaises(RuntimeError):
+                validate_dual_source_entry(
+                    entry, raw_root, norm_root, self.logger
+                )
+
+
+# ---------------------------------------------------------------------------
+# extract_dual_source_files – cross-repo source roots
+# ---------------------------------------------------------------------------
+
+class TestExtractDualSourceFilesWithRoots(unittest.TestCase):
+    """Verify extraction uses separate source roots for raw and normalized."""
+
+    def setUp(self):
+        self.logger = _make_logger()
+
+    def test_cross_repo_extraction_copies_from_correct_dirs(self):
+        with tempfile.TemporaryDirectory() as target_root, \
+                tempfile.TemporaryDirectory() as raw_src_root, \
+                tempfile.TemporaryDirectory() as norm_src_root:
+            # Only place each file in its own source root.
+            with open(os.path.join(raw_src_root, "raw.json"), "w") as f:
+                f.write("{}")
+            with open(os.path.join(norm_src_root, "norm.json"), "w") as f:
+                f.write("{}")
+            entry = {
+                "case_id": "cross-test",
+                "target_case_raw_dir": "raw",
+                "target_case_normalized_dir": "normalized",
+            }
+            raw_records, norm_records = extract_dual_source_files(
+                entry,
+                raw_paths=["raw.json"],
+                normalized_paths=["norm.json"],
+                repo_root=target_root,
+                logger=self.logger,
+                raw_root=raw_src_root,
+                normalized_root=norm_src_root,
+            )
+            self.assertTrue(
+                os.path.isfile(os.path.join(target_root, "raw", "raw.json"))
+            )
+            self.assertTrue(
+                os.path.isfile(os.path.join(target_root, "normalized", "norm.json"))
+            )
+            self.assertEqual(raw_records[0]["source_path"], "raw.json")
+            self.assertEqual(norm_records[0]["source_path"], "norm.json")
+
+
 # ---------------------------------------------------------------------------
 # load_registry and find_registry_entry
 # ---------------------------------------------------------------------------
@@ -707,9 +869,10 @@ class TestRunExtractionDualSource(unittest.TestCase):
                 tempfile.TemporaryDirectory() as wd2, \
                 tempfile.TemporaryDirectory() as wd3:
 
-            # Create source files.
-            raw_src = os.path.join(repo_root, "raw_data.csv")
-            norm_src = os.path.join(repo_root, "norm_data.csv")
+            # Create source files in the correct source repo checkout dirs.
+            # raw_data.csv lives in wd2 (DAILY), norm_data.csv in wd3 (ANALYSIS).
+            raw_src = os.path.join(wd2, "raw_data.csv")
+            norm_src = os.path.join(wd3, "norm_data.csv")
             with open(raw_src, "w") as f:
                 f.write("raw")
             with open(norm_src, "w") as f:
@@ -720,8 +883,8 @@ class TestRunExtractionDualSource(unittest.TestCase):
                 "entries": [
                     {
                         "case_id": "case-test",
-                        "raw_source_repository": "org/DAILY",
-                        "normalized_source_repository": "org/ANALYSIS",
+                        "raw_source_repository": "abdelkader-omran/AUTO-DZ-ACT-3I-ATLAS-DAILY",
+                        "normalized_source_repository": "abdelkader-omran/AUTO-DZ-ACT-ANALYSIS-3I-ATLAS",
                         "allowed_raw_source_paths": ["raw_data.csv"],
                         "allowed_normalized_source_paths": ["norm_data.csv"],
                         "target_case_raw_dir": "cases/case-test/raw",
@@ -867,9 +1030,10 @@ class TestMain(unittest.TestCase):
                 tempfile.TemporaryDirectory() as wd2, \
                 tempfile.TemporaryDirectory() as wd3:
 
-            # Source files
-            raw_src = os.path.join(repo_root, "raw_obs.csv")
-            norm_src = os.path.join(repo_root, "norm_obs.csv")
+            # Source files must reside in the correct source repo checkouts.
+            # raw_obs.csv in wd2 (DAILY), norm_obs.csv in wd3 (ANALYSIS).
+            raw_src = os.path.join(wd2, "raw_obs.csv")
+            norm_src = os.path.join(wd3, "norm_obs.csv")
             with open(raw_src, "w") as f:
                 f.write("raw")
             with open(norm_src, "w") as f:
@@ -880,8 +1044,8 @@ class TestMain(unittest.TestCase):
                 "entries": [
                     {
                         "case_id": "case-cli-test",
-                        "raw_source_repository": "org/DAILY",
-                        "normalized_source_repository": "org/ANALYSIS",
+                        "raw_source_repository": "abdelkader-omran/AUTO-DZ-ACT-3I-ATLAS-DAILY",
+                        "normalized_source_repository": "abdelkader-omran/AUTO-DZ-ACT-ANALYSIS-3I-ATLAS",
                         "allowed_raw_source_paths": ["raw_obs.csv"],
                         "allowed_normalized_source_paths": ["norm_obs.csv"],
                         "target_case_raw_dir": "cases/case-cli-test/raw",

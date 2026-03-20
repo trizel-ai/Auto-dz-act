@@ -137,6 +137,38 @@ def check_workspace_readiness(workspace_path: str, logger: logging.Logger) -> No
     logger.info("Workspace readiness confirmed — ALL REQUIRED REPOSITORIES ARE RESOLVED")
 
 
+def _get_repo_local_path(workspace_path: str, repo_name: str) -> str:
+    """Return the confirmed local path for *repo_name* from the workspace registry.
+
+    Raises
+    ------
+    KeyError
+        If *repo_name* is not declared in the workspace registry.
+    RuntimeError
+        If the repository's local path is not confirmed.
+    """
+    with open(workspace_path, encoding="utf-8") as fh:
+        workspace = json.load(fh)
+
+    for repo in workspace.get("repositories", []):
+        if repo.get("repository") == repo_name:
+            path = repo.get("expected_local_path", "")
+            if (
+                path.strip().upper().startswith(_PLACEHOLDER_PREFIX)
+                or repo.get("local_path_status") != _STATUS_CONFIRMED
+            ):
+                raise RuntimeError(
+                    f"Repository '{repo_name}' local path is not confirmed in "
+                    "workspace registry. Run bootstrap_workspace.py first."
+                )
+            return path
+
+    raise KeyError(
+        f"Repository '{repo_name}' is not declared in the workspace registry. "
+        "Add it to repositories.json before running extraction."
+    )
+
+
 # ---------------------------------------------------------------------------
 # Registry helpers
 # ---------------------------------------------------------------------------
@@ -263,9 +295,20 @@ def _validate_source_paths(
 
 
 def validate_dual_source_entry(
-    entry: dict[str, Any], repo_root: str, logger: logging.Logger
+    entry: dict[str, Any],
+    raw_root: str,
+    normalized_root: str,
+    logger: logging.Logger,
 ) -> tuple[list[str], list[str]]:
     """Validate a dual-source registry entry.
+
+    Parameters
+    ----------
+    raw_root:
+        Absolute local path to the raw source repository checkout (DAILY).
+    normalized_root:
+        Absolute local path to the normalized source repository checkout
+        (ANALYSIS).
 
     Returns
     -------
@@ -284,14 +327,14 @@ def validate_dual_source_entry(
         case_id,
         entry.get("allowed_raw_source_paths", []),
         "raw",
-        repo_root,
+        raw_root,
         logger,
     )
     normalized_paths = _validate_source_paths(
         case_id,
         entry.get("allowed_normalized_source_paths", []),
         "normalized",
-        repo_root,
+        normalized_root,
         logger,
     )
     return raw_paths, normalized_paths
@@ -337,6 +380,7 @@ def _copy_files_to_dir(
     repo_root: str,
     label: str,
     logger: logging.Logger,
+    source_root: str | None = None,
 ) -> list[dict[str, str]]:
     """Copy approved source files into *target_dir_rel*.
 
@@ -344,6 +388,10 @@ def _copy_files_to_dir(
     ----------
     label:
         Human-readable label for log messages (e.g. 'raw', 'normalized').
+    source_root:
+        Absolute path to the source repository checkout from which
+        *source_paths* are resolved.  Defaults to *repo_root* when ``None``
+        (backward-compatible behaviour for single-source entries).
 
     Returns a list of copy records: [{source_path, destination_path}, ...].
 
@@ -353,13 +401,14 @@ def _copy_files_to_dir(
         On any copy failure or filename collision within this run.
     """
     target_dir = os.path.join(repo_root, target_dir_rel)
+    _source_root = source_root if source_root is not None else repo_root
     os.makedirs(target_dir, exist_ok=True)
 
     copy_records: list[dict[str, str]] = []
     seen_destinations: set[str] = set()
 
     for rel_path in source_paths:
-        src = os.path.join(repo_root, rel_path)
+        src = os.path.join(_source_root, rel_path)
         filename = _destination_filename(rel_path)
         dst = os.path.join(target_dir, filename)
 
@@ -425,6 +474,8 @@ def extract_dual_source_files(
     normalized_paths: list[str],
     repo_root: str,
     logger: logging.Logger,
+    raw_root: str | None = None,
+    normalized_root: str | None = None,
 ) -> tuple[list[dict[str, str]], list[dict[str, str]]]:
     """Execute dual-source extraction for a case.
 
@@ -432,6 +483,15 @@ def extract_dual_source_files(
     Step B — copies normalized files from the ANALYSIS repository into normalized/.
 
     No mixing between steps is permitted.
+
+    Parameters
+    ----------
+    raw_root:
+        Absolute local path to the raw source repository checkout (DAILY).
+        Defaults to *repo_root* when ``None``.
+    normalized_root:
+        Absolute local path to the normalized source repository checkout
+        (ANALYSIS).  Defaults to *repo_root* when ``None``.
 
     Returns
     -------
@@ -452,6 +512,7 @@ def extract_dual_source_files(
         repo_root=repo_root,
         label="raw",
         logger=logger,
+        source_root=raw_root,
     )
 
     logger.info("=== Step B: normalized extraction (ANALYSIS → normalized/) ===")
@@ -462,6 +523,7 @@ def extract_dual_source_files(
         repo_root=repo_root,
         label="normalized",
         logger=logger,
+        source_root=normalized_root,
     )
 
     return raw_records, normalized_records
@@ -696,14 +758,23 @@ def run_extraction(
             entry.get("normalized_source_repository", "<unset>"),
         )
 
-        # 4. Validate entry and resolve source paths (both steps).
+        # 4a. Resolve each source repository's local checkout root from workspace.
+        raw_source_repo = entry.get("raw_source_repository", "")
+        normalized_source_repo = entry.get("normalized_source_repository", "")
+        raw_root = _get_repo_local_path(workspace_path, raw_source_repo)
+        normalized_root = _get_repo_local_path(workspace_path, normalized_source_repo)
+        logger.info("Raw source root      : %s", raw_root)
+        logger.info("Normalized source root: %s", normalized_root)
+
+        # 4b. Validate entry and resolve source paths against correct roots.
         raw_paths, normalized_paths = validate_dual_source_entry(
-            entry, repo_root, logger
+            entry, raw_root, normalized_root, logger
         )
 
         # 5. Extract files (dual-source).
         raw_records, normalized_records = extract_dual_source_files(
-            entry, raw_paths, normalized_paths, repo_root, logger
+            entry, raw_paths, normalized_paths, repo_root, logger,
+            raw_root=raw_root, normalized_root=normalized_root,
         )
 
         # 6. Update provenance with dual-source lineage.
