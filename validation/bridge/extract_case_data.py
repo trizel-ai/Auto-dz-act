@@ -626,8 +626,9 @@ def _maybe_select_by_true_time(
             f"Strategy '{strategy}': no candidate files found."
         )
 
-    # Unpack the four-element tuple; counts are not needed by this helper.
-    abs_path, _, _invalid, _total = select_latest_by_true_time(candidates, logger)
+    # Consume the structured selection record directly.
+    selection = select_latest_by_true_time(candidates, logger)
+    abs_path = selection["path"]
     rel_path = os.path.relpath(abs_path, repo_root)
     # Normalise path separators to forward slashes for portability.
     rel_path = rel_path.replace(os.sep, "/")
@@ -750,9 +751,10 @@ def resolve_source_strategy(
         n_invalid = 0
 
         try:
-            abs_path, utc_dt, n_invalid, _ = select_latest_by_true_time(
-                candidates, logger
-            )
+            selection = select_latest_by_true_time(candidates, logger)
+            abs_path = selection["path"]
+            utc_dt = selection["selected_retrieved_utc"]
+            n_invalid = selection["invalid_candidates"]
             rel_path = os.path.relpath(abs_path, repo_root).replace(os.sep, "/")
             selected_retrieved_utc = utc_dt.isoformat()
             selection_method = "latest_by_true_time"
