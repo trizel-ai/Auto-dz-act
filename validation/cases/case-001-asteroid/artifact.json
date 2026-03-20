@@ -1,8 +1,10 @@
 {
-  "case_id": "case-001",
-  "phenomenon": "asteroid",
-  "framework_version": "1.0",
-  "outputs": {},
-  "status": "scaffolded",
-  "_note": "Populated incrementally in follow-up commits."
+  "artifact_id": "artifact-case-001",
+  "case_id": "case-001-asteroid",
+  "type": "structured_epistemic_output",
+  "repository": "Auto-dz-act",
+  "epistemic_layer": "Layer-1",
+  "status": "incomplete",
+  "description": "Structured output derived from normalized asteroid observational data",
+  "provenance_required": true
 }

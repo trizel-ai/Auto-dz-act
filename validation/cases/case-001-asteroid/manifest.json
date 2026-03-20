@@ -1,9 +1,13 @@
 {
-  "case_id": "case-001",
-  "phenomenon": "asteroid",
-  "framework_version": "1.0",
-  "status": "scaffolded",
-  "files": [],
-  "hashes": {},
-  "_note": "Populated incrementally in follow-up commits."
+  "case_id": "case-001-asteroid",
+  "files": [
+    "raw/",
+    "normalized/",
+    "provenance.json",
+    "artifact.json",
+    "epistemic_state.json"
+  ],
+  "hash_algorithm": "sha256",
+  "status": "incomplete",
+  "note": "Hashes will be added after data population"
 }

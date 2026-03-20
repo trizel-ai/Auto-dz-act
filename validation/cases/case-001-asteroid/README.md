@@ -1,40 +1,49 @@
-# Case 001 — Asteroid
+# Case 001 — Asteroid Validation Case
 
-**Case ID**: case-001  
-**Phenomenon**: Asteroid  
-**Status**: Scaffolded (awaiting data population)  
-**Framework**: validation/framework.md
+## Purpose
 
----
+This case represents the first operational validation of TRIZEL on a small-body (asteroid-like) observational dataset.
 
-## Description
+It is designed to validate:
 
-This case validates TRIZEL execution across asteroid-class phenomena.
+- provenance completeness
+- artifact structure
+- repository-to-layer mapping
+- epistemic consistency
 
-Source data, normalized outputs, and all derived artifacts will be populated in follow-up commits.
+## Scope
 
----
+This case does NOT introduce interpretation.
+
+It strictly implements:
+
+raw → normalized → manifest → provenance → artifact → epistemic_state
+
+## Status
+
+Scaffold initialized.  
+Data population will be added incrementally.
+
+## Layer
+
+Layer-1 (Execution)
+
+## Repository
+
+Auto-dz-act
 
 ## Structure
 
 ```
 case-001-asteroid/
-├── raw/                  ← unmodified source data (pending)
-├── normalized/           ← processed standardized data (pending)
-├── manifest.json         ← file index + hashes
-├── provenance.json       ← full lineage (repo, layer, source)
-├── artifact.json         ← structured output
-├── epistemic_state.json  ← state classification
-└── README.md             ← this file
+├── raw/                  ← original unmodified observational data (placeholder for now)
+├── normalized/           ← standardized representation of raw data
+├── manifest.json         ← file registry and integrity structure
+├── provenance.json       ← lineage (repository, layer, source)
+├── artifact.json         ← structured output definition
+├── epistemic_state.json  ← classification of epistemic state
+└── README.md             ← structural description (no interpretation)
 ```
-
----
-
-## Notes
-
-No scientific interpretation is contained in this case.
-
-This README describes structure only, not results.
 
 ---
 
