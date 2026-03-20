@@ -69,7 +69,7 @@ jobs:
         with:
           repository: abdelkader-omran/AUTO-DZ-ACT-3I-ATLAS-DAILY
           token: ${{ secrets.TRIZEL_CROSS_REPO_READ_TOKEN }}
-          path: "workspace/AUTO-DZ-ACT-3I-ATLAS-DAILY"
+          path: "repos/daily"
 
       # -------------------------------------------------------------------
       # 3) Checkout normalized source repository into a sibling workspace dir
@@ -79,7 +79,7 @@ jobs:
         with:
           repository: abdelkader-omran/AUTO-DZ-ACT-ANALYSIS-3I-ATLAS
           token: ${{ secrets.TRIZEL_CROSS_REPO_READ_TOKEN }}
-          path: "workspace/AUTO-DZ-ACT-ANALYSIS-3I-ATLAS"
+          path: "repos/analysis"
 
       # -------------------------------------------------------------------
       # 4) Set up Python runtime
@@ -100,8 +100,8 @@ jobs:
         run: |
           python validation/bridge/workspace/bootstrap_workspace.py \
             --auto-dz-act  "$GITHUB_WORKSPACE" \
-            --atlas-daily  "$GITHUB_WORKSPACE/workspace/AUTO-DZ-ACT-3I-ATLAS-DAILY" \
-            --atlas-analysis "$GITHUB_WORKSPACE/workspace/AUTO-DZ-ACT-ANALYSIS-3I-ATLAS"
+            --atlas-daily  "$GITHUB_WORKSPACE/repos/daily" \
+            --atlas-analysis "$GITHUB_WORKSPACE/repos/analysis"
 
       # -------------------------------------------------------------------
       # 6) Validate workspace readiness (read-only guard)
