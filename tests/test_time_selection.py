@@ -300,6 +300,17 @@ class TestSelectLatestByTrueTime(unittest.TestCase):
         _, _, _, total_count = select_latest_by_true_time(files, self.logger)
         self.assertEqual(total_count, 3)
 
+    def test_invalid_candidates_tracked(self) -> None:
+        """Each invalid candidate must be counted — no silent discarding."""
+        inv1 = self._make_invalid_file()
+        inv2 = self._make_invalid_file()
+        valid = self._make_file("2026-03-20T00:00:00Z")
+        _, _, invalid_count, total_count = select_latest_by_true_time(
+            [inv1, inv2, valid], self.logger
+        )
+        self.assertEqual(invalid_count, 2)
+        self.assertEqual(total_count, 3)
+
     # --- error cases ---
 
     def test_empty_list_raises_runtime_error(self) -> None:
