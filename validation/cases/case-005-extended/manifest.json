@@ -1,0 +1,9 @@
+{
+  "case_id": "case-005",
+  "phenomenon": "extended",
+  "framework_version": "1.0",
+  "status": "scaffolded",
+  "files": [],
+  "hashes": {},
+  "_note": "Populated incrementally in follow-up commits."
+}

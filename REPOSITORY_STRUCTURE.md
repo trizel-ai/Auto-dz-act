@@ -37,6 +37,19 @@ Contains official visual assets:
 - **README.md** — Assets usage guide
 - **badges/** — SVG badges (full and compact versions)
 
+### validation/
+Contains the multi-phenomena validation framework and case scaffolding:
+- **framework.md** — Framework definition: purpose, invariants, cross-case consistency, reproducibility rules
+- **cases/** — One sub-directory per validated case:
+  - **case-001-asteroid/** — Asteroid phenomenon case
+  - **case-002-comet/** — Comet phenomenon case
+  - **case-003-interstellar/** — Interstellar object phenomenon case
+  - **case-004-neo/** — Near-Earth object (NEO) case
+  - **case-005-extended/** — Extended / mixed phenomena case
+  - Each case contains: `raw/`, `normalized/`, `manifest.json`, `provenance.json`, `artifact.json`, `epistemic_state.json`, `README.md`
+- **summary/** — Validation summary outputs:
+  - **validation-report.md** — Cross-case comparison, consistency checks, detected gaps, structural issues, recommendations
+
 ---
 
 ## Content policy

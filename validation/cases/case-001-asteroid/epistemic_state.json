@@ -1,0 +1,9 @@
+{
+  "case_id": "case-001",
+  "phenomenon": "asteroid",
+  "layer": "Layer-1",
+  "epistemic_role": null,
+  "classification": null,
+  "status": "scaffolded",
+  "_note": "Populated incrementally in follow-up commits."
+}
