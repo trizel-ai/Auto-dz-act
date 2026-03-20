@@ -1,12 +1,15 @@
 {
-  "case_id": "case-001",
-  "phenomenon": "asteroid",
-  "repository": "https://github.com/trizel-ai/Auto-dz-act",
-  "layer": "Layer-1",
-  "source": null,
-  "doi": null,
-  "governance_path": "GOVERNANCE.md",
-  "lineage": [],
-  "status": "scaffolded",
-  "_note": "Populated incrementally in follow-up commits."
+  "repository": "Auto-dz-act",
+  "organization": "trizel-ai",
+  "epistemic_layer": "Layer-1",
+  "case_id": "case-001-asteroid",
+  "source_type": "observational_data",
+  "data_origin": "TBD",
+  "processing": [
+    "raw_ingestion",
+    "normalization",
+    "artifact_structuring"
+  ],
+  "governance_reference": "trizel-core",
+  "note": "Full source attribution will be added during data population"
 }
