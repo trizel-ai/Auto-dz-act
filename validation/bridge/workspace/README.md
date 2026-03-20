@@ -76,7 +76,9 @@ be confirmed, extraction is blocked until the workspace is correctly set up.
 |------|------|
 | `README.md` | This document |
 | `WORKSPACE_RULES.md` | Strict rules governing local workspace usage |
+| `PATH_RESOLUTION_CONVENTIONS.md` | Path resolution conventions (PC-1 – PC-6) |
 | `repositories.json` | Declarative registry of required local repositories |
+| `bootstrap_workspace.py` | Workspace bootstrap: writes confirmed paths into `repositories.json` |
 | `resolve_workspace_paths.py` | Workspace readiness checker (no extraction) |
 
 ---
