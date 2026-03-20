@@ -28,8 +28,13 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from validation.bridge.extract_case_data import (
     EXTRACTION_METHOD,
+    STRATEGY_LATEST_DAILY_OBSERVATION,
+    STRATEGY_LATEST_ANALYSIS_NORMALIZED,
     _is_placeholder,
     _is_dual_source_entry,
+    _is_iso_date_dir,
+    _find_latest_matching_file,
+    resolve_source_strategy,
     validate_entry_status,
     _validate_source_paths,
     validate_dual_source_entry,
@@ -1109,6 +1114,502 @@ class TestMain(unittest.TestCase):
                     ]
                 )
                 self.assertEqual(result, 1)
+            finally:
+                os.unlink(reg_path)
+                os.unlink(ws_path)
+
+
+# ---------------------------------------------------------------------------
+# _is_iso_date_dir
+# ---------------------------------------------------------------------------
+
+class TestIsIsoDateDir(unittest.TestCase):
+    def test_valid_date_returns_true(self):
+        self.assertTrue(_is_iso_date_dir("2026-03-15"))
+
+    def test_newest_date_returns_true(self):
+        self.assertTrue(_is_iso_date_dir("2026-12-31"))
+
+    def test_invalid_month_returns_false(self):
+        self.assertFalse(_is_iso_date_dir("2026-13-01"))
+
+    def test_invalid_day_returns_false(self):
+        self.assertFalse(_is_iso_date_dir("2026-02-30"))
+
+    def test_wrong_format_returns_false(self):
+        self.assertFalse(_is_iso_date_dir("20260315"))
+
+    def test_snapshot_dir_name_returns_false(self):
+        self.assertFalse(_is_iso_date_dir("snapshot-2026"))
+
+    def test_empty_string_returns_false(self):
+        self.assertFalse(_is_iso_date_dir(""))
+
+    def test_almost_iso_returns_false(self):
+        self.assertFalse(_is_iso_date_dir("2026-3-15"))  # missing zero-pad
+
+
+# ---------------------------------------------------------------------------
+# _find_latest_matching_file
+# ---------------------------------------------------------------------------
+
+class TestFindLatestMatchingFile(unittest.TestCase):
+    def _make_daily_tree(self, base: str, dates: list[str]) -> None:
+        """Create observations/YYYY-MM-DD/observation.json under *base*."""
+        for date in dates:
+            path = os.path.join(base, "observations", date)
+            os.makedirs(path, exist_ok=True)
+            with open(os.path.join(path, "observation.json"), "w") as f:
+                f.write("{}")
+
+    def _make_analysis_tree(self, base: str, dates: list[str]) -> None:
+        """Create public/observations/YYYY-MM-DD/normalized_observation.json."""
+        for date in dates:
+            path = os.path.join(base, "public", "observations", date)
+            os.makedirs(path, exist_ok=True)
+            with open(
+                os.path.join(path, "normalized_observation.json"), "w"
+            ) as f:
+                f.write("{}")
+
+    def test_returns_latest_of_multiple_dates(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            self._make_daily_tree(
+                tmpdir, ["2026-03-15", "2026-03-17", "2026-03-16"]
+            )
+            result = _find_latest_matching_file(
+                tmpdir, "observations", "observation.json"
+            )
+        self.assertEqual(result, "observations/2026-03-17/observation.json")
+
+    def test_returns_single_date(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            self._make_daily_tree(tmpdir, ["2026-03-20"])
+            result = _find_latest_matching_file(
+                tmpdir, "observations", "observation.json"
+            )
+        self.assertEqual(result, "observations/2026-03-20/observation.json")
+
+    def test_ignores_non_iso_directories(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            self._make_daily_tree(tmpdir, ["2026-03-15", "2026-03-18"])
+            # Add a non-ISO directory that also contains the target file.
+            junk_dir = os.path.join(tmpdir, "observations", "snapshots")
+            os.makedirs(junk_dir)
+            with open(os.path.join(junk_dir, "observation.json"), "w") as f:
+                f.write("{}")
+            result = _find_latest_matching_file(
+                tmpdir, "observations", "observation.json"
+            )
+        self.assertEqual(result, "observations/2026-03-18/observation.json")
+
+    def test_returns_none_when_no_valid_dates(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            os.makedirs(os.path.join(tmpdir, "observations"))
+            result = _find_latest_matching_file(
+                tmpdir, "observations", "observation.json"
+            )
+        self.assertIsNone(result)
+
+    def test_returns_none_when_subdir_missing(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            result = _find_latest_matching_file(
+                tmpdir, "observations", "observation.json"
+            )
+        self.assertIsNone(result)
+
+    def test_analysis_path_with_nested_subdir(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            self._make_analysis_tree(tmpdir, ["2026-03-15", "2026-03-20"])
+            result = _find_latest_matching_file(
+                tmpdir, "public/observations", "normalized_observation.json"
+            )
+        self.assertEqual(
+            result,
+            "public/observations/2026-03-20/normalized_observation.json",
+        )
+
+    def test_date_without_target_file_is_ignored(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # 2026-03-17 has the file; 2026-03-18 directory exists but is empty.
+            self._make_daily_tree(tmpdir, ["2026-03-17"])
+            os.makedirs(
+                os.path.join(tmpdir, "observations", "2026-03-18"), exist_ok=True
+            )
+            result = _find_latest_matching_file(
+                tmpdir, "observations", "observation.json"
+            )
+        self.assertEqual(result, "observations/2026-03-17/observation.json")
+
+
+# ---------------------------------------------------------------------------
+# resolve_source_strategy
+# ---------------------------------------------------------------------------
+
+class TestResolveSourceStrategy(unittest.TestCase):
+    def setUp(self):
+        self.logger = _make_logger()
+
+    def _make_daily_tree(self, base: str, dates: list[str]) -> None:
+        for date in dates:
+            path = os.path.join(base, "observations", date)
+            os.makedirs(path, exist_ok=True)
+            with open(os.path.join(path, "observation.json"), "w") as f:
+                f.write("{}")
+
+    def _make_analysis_tree(self, base: str, dates: list[str]) -> None:
+        for date in dates:
+            path = os.path.join(base, "public", "observations", date)
+            os.makedirs(path, exist_ok=True)
+            with open(
+                os.path.join(path, "normalized_observation.json"), "w"
+            ) as f:
+                f.write("{}")
+
+    def test_latest_daily_observation_returns_path(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            self._make_daily_tree(tmpdir, ["2026-03-15", "2026-03-20"])
+            result = resolve_source_strategy(
+                STRATEGY_LATEST_DAILY_OBSERVATION, tmpdir, self.logger
+            )
+        self.assertEqual(result, "observations/2026-03-20/observation.json")
+
+    def test_latest_analysis_normalized_returns_path(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            self._make_analysis_tree(tmpdir, ["2026-03-15", "2026-03-19"])
+            result = resolve_source_strategy(
+                STRATEGY_LATEST_ANALYSIS_NORMALIZED, tmpdir, self.logger
+            )
+        self.assertEqual(
+            result,
+            "public/observations/2026-03-19/normalized_observation.json",
+        )
+
+    def test_no_valid_files_raises_runtime_error(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with self.assertRaises(RuntimeError) as ctx:
+                resolve_source_strategy(
+                    STRATEGY_LATEST_DAILY_OBSERVATION, tmpdir, self.logger
+                )
+            self.assertIn("no valid", str(ctx.exception))
+
+    def test_unknown_strategy_raises_value_error(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with self.assertRaises(ValueError) as ctx:
+                resolve_source_strategy(
+                    "unknown_strategy", tmpdir, self.logger
+                )
+            self.assertIn("Unknown source strategy", str(ctx.exception))
+
+
+# ---------------------------------------------------------------------------
+# validate_dual_source_entry — strategy mode
+# ---------------------------------------------------------------------------
+
+class TestValidateDualSourceEntryStrategyMode(unittest.TestCase):
+    def setUp(self):
+        self.logger = _make_logger()
+
+    def _make_daily_tree(self, base: str, dates: list[str]) -> None:
+        for date in dates:
+            path = os.path.join(base, "observations", date)
+            os.makedirs(path, exist_ok=True)
+            with open(os.path.join(path, "observation.json"), "w") as f:
+                f.write("{}")
+
+    def _make_analysis_tree(self, base: str, dates: list[str]) -> None:
+        for date in dates:
+            path = os.path.join(base, "public", "observations", date)
+            os.makedirs(path, exist_ok=True)
+            with open(
+                os.path.join(path, "normalized_observation.json"), "w"
+            ) as f:
+                f.write("{}")
+
+    def test_strategy_mode_resolves_both_paths(self):
+        with tempfile.TemporaryDirectory() as raw_root, \
+                tempfile.TemporaryDirectory() as norm_root:
+            self._make_daily_tree(raw_root, ["2026-03-15", "2026-03-20"])
+            self._make_analysis_tree(norm_root, ["2026-03-15", "2026-03-19"])
+            entry = {
+                "case_id": "case-strategy-test",
+                "raw_source_repository": "org/DAILY",
+                "normalized_source_repository": "org/ANALYSIS",
+                "raw_source_strategy": STRATEGY_LATEST_DAILY_OBSERVATION,
+                "normalized_source_strategy": STRATEGY_LATEST_ANALYSIS_NORMALIZED,
+                "extraction_status": "approved",
+            }
+            raw_paths, norm_paths = validate_dual_source_entry(
+                entry, raw_root, norm_root, self.logger
+            )
+        self.assertEqual(
+            raw_paths, ["observations/2026-03-20/observation.json"]
+        )
+        self.assertEqual(
+            norm_paths,
+            ["public/observations/2026-03-19/normalized_observation.json"],
+        )
+
+    def test_strategy_mode_latest_date_wins(self):
+        with tempfile.TemporaryDirectory() as raw_root, \
+                tempfile.TemporaryDirectory() as norm_root:
+            self._make_daily_tree(
+                raw_root, ["2026-03-15", "2026-03-16", "2026-03-20"]
+            )
+            self._make_analysis_tree(norm_root, ["2026-03-15"])
+            entry = {
+                "case_id": "case-strategy-test",
+                "raw_source_repository": "org/DAILY",
+                "normalized_source_repository": "org/ANALYSIS",
+                "raw_source_strategy": STRATEGY_LATEST_DAILY_OBSERVATION,
+                "normalized_source_strategy": STRATEGY_LATEST_ANALYSIS_NORMALIZED,
+                "extraction_status": "approved",
+            }
+            raw_paths, _ = validate_dual_source_entry(
+                entry, raw_root, norm_root, self.logger
+            )
+        self.assertEqual(
+            raw_paths, ["observations/2026-03-20/observation.json"]
+        )
+
+    def test_strategy_mode_fails_when_no_files_exist(self):
+        with tempfile.TemporaryDirectory() as raw_root, \
+                tempfile.TemporaryDirectory() as norm_root:
+            entry = {
+                "case_id": "case-strategy-test",
+                "raw_source_repository": "org/DAILY",
+                "normalized_source_repository": "org/ANALYSIS",
+                "raw_source_strategy": STRATEGY_LATEST_DAILY_OBSERVATION,
+                "normalized_source_strategy": STRATEGY_LATEST_ANALYSIS_NORMALIZED,
+                "extraction_status": "approved",
+            }
+            with self.assertRaises(RuntimeError):
+                validate_dual_source_entry(
+                    entry, raw_root, norm_root, self.logger
+                )
+
+    def test_explicit_path_mode_still_works(self):
+        """Backward compatibility: explicit allowed_*_source_paths still works."""
+        with tempfile.TemporaryDirectory() as raw_root, \
+                tempfile.TemporaryDirectory() as norm_root:
+            with open(os.path.join(raw_root, "obs.json"), "w") as f:
+                f.write("{}")
+            with open(os.path.join(norm_root, "norm.json"), "w") as f:
+                f.write("{}")
+            entry = {
+                "case_id": "case-explicit",
+                "raw_source_repository": "org/DAILY",
+                "normalized_source_repository": "org/ANALYSIS",
+                "allowed_raw_source_paths": ["obs.json"],
+                "allowed_normalized_source_paths": ["norm.json"],
+                "extraction_status": "approved",
+            }
+            raw_paths, norm_paths = validate_dual_source_entry(
+                entry, raw_root, norm_root, self.logger
+            )
+        self.assertEqual(raw_paths, ["obs.json"])
+        self.assertEqual(norm_paths, ["norm.json"])
+
+    def test_only_iso_date_dirs_considered(self):
+        """Non-ISO directories are ignored; only ISO dates are candidates."""
+        with tempfile.TemporaryDirectory() as raw_root, \
+                tempfile.TemporaryDirectory() as norm_root:
+            # Create a valid ISO date directory.
+            valid = os.path.join(raw_root, "observations", "2026-03-15")
+            os.makedirs(valid)
+            with open(os.path.join(valid, "observation.json"), "w") as f:
+                f.write("{}")
+            # Create a non-ISO directory with the same file — must be ignored.
+            invalid = os.path.join(raw_root, "observations", "latest")
+            os.makedirs(invalid)
+            with open(os.path.join(invalid, "observation.json"), "w") as f:
+                f.write("{}")
+            self._make_analysis_tree(norm_root, ["2026-03-15"])
+            entry = {
+                "case_id": "case-iso-only",
+                "raw_source_repository": "org/DAILY",
+                "normalized_source_repository": "org/ANALYSIS",
+                "raw_source_strategy": STRATEGY_LATEST_DAILY_OBSERVATION,
+                "normalized_source_strategy": STRATEGY_LATEST_ANALYSIS_NORMALIZED,
+                "extraction_status": "approved",
+            }
+            raw_paths, _ = validate_dual_source_entry(
+                entry, raw_root, norm_root, self.logger
+            )
+        self.assertEqual(
+            raw_paths, ["observations/2026-03-15/observation.json"]
+        )
+
+
+# ---------------------------------------------------------------------------
+# run_extraction — strategy mode integration
+# ---------------------------------------------------------------------------
+
+class TestRunExtractionStrategyMode(unittest.TestCase):
+    """Integration tests for run_extraction using strategy-based discovery."""
+
+    def setUp(self):
+        self.logger = _make_logger()
+
+    def _setup_workspace(self, *repo_dirs) -> str:
+        repos = [
+            "trizel-ai/Auto-dz-act",
+            "abdelkader-omran/AUTO-DZ-ACT-3I-ATLAS-DAILY",
+            "abdelkader-omran/AUTO-DZ-ACT-ANALYSIS-3I-ATLAS",
+        ]
+        registry = {
+            "workspace_version": "1.0",
+            "repositories": [
+                {
+                    "repository": name,
+                    "expected_local_path": path,
+                    "local_path_status": "confirmed",
+                    "visibility_required": True,
+                }
+                for name, path in zip(repos, repo_dirs)
+            ],
+        }
+        return _write_json(registry)
+
+    def _make_daily_tree(self, base: str, dates: list[str]) -> None:
+        for date in dates:
+            path = os.path.join(base, "observations", date)
+            os.makedirs(path, exist_ok=True)
+            with open(os.path.join(path, "observation.json"), "w") as f:
+                f.write('{"date": "' + date + '"}')
+
+    def _make_analysis_tree(self, base: str, dates: list[str]) -> None:
+        for date in dates:
+            path = os.path.join(base, "public", "observations", date)
+            os.makedirs(path, exist_ok=True)
+            with open(
+                os.path.join(path, "normalized_observation.json"), "w"
+            ) as f:
+                f.write('{"date": "' + date + '"}')
+
+    def test_strategy_extraction_uses_latest_discovered_files(self):
+        with tempfile.TemporaryDirectory() as repo_root, \
+                tempfile.TemporaryDirectory() as wd1, \
+                tempfile.TemporaryDirectory() as wd2, \
+                tempfile.TemporaryDirectory() as wd3:
+
+            self._make_daily_tree(wd2, ["2026-03-15", "2026-03-20"])
+            self._make_analysis_tree(wd3, ["2026-03-15", "2026-03-19"])
+
+            registry = {
+                "registry_version": "1.2",
+                "entries": [
+                    {
+                        "case_id": "case-001-asteroid",
+                        "raw_source_repository": (
+                            "abdelkader-omran/AUTO-DZ-ACT-3I-ATLAS-DAILY"
+                        ),
+                        "normalized_source_repository": (
+                            "abdelkader-omran/AUTO-DZ-ACT-ANALYSIS-3I-ATLAS"
+                        ),
+                        "raw_source_strategy": STRATEGY_LATEST_DAILY_OBSERVATION,
+                        "normalized_source_strategy": (
+                            STRATEGY_LATEST_ANALYSIS_NORMALIZED
+                        ),
+                        "target_case_raw_dir": "cases/case-001-asteroid/raw",
+                        "target_case_normalized_dir": (
+                            "cases/case-001-asteroid/normalized"
+                        ),
+                        "extraction_status": "approved",
+                        "governance_reference": "bridge_rules.md",
+                    }
+                ],
+            }
+            reg_path = _write_json(registry)
+            ws_path = self._setup_workspace(wd1, wd2, wd3)
+            try:
+                run_extraction(
+                    case_id="case-001-asteroid",
+                    registry_path=reg_path,
+                    workspace_path=ws_path,
+                    repo_root=repo_root,
+                    logger=self.logger,
+                )
+                # Latest DAILY date is 2026-03-20; latest ANALYSIS date is 2026-03-19.
+                raw_dest = os.path.join(
+                    repo_root,
+                    "cases/case-001-asteroid/raw",
+                    "observations__2026-03-20__observation.json",
+                )
+                norm_dest = os.path.join(
+                    repo_root,
+                    "cases/case-001-asteroid/normalized",
+                    "public__observations__2026-03-19__normalized_observation.json",
+                )
+                self.assertTrue(os.path.isfile(raw_dest), f"Missing: {raw_dest}")
+                self.assertTrue(os.path.isfile(norm_dest), f"Missing: {norm_dest}")
+
+                # Provenance records the actual discovered paths.
+                prov_path = os.path.join(
+                    repo_root, "cases/case-001-asteroid/provenance.json"
+                )
+                with open(prov_path) as f:
+                    prov = json.load(f)
+                self.assertIn(
+                    "observations/2026-03-20/observation.json",
+                    prov["source_files"]["raw"],
+                )
+                self.assertIn(
+                    "public/observations/2026-03-19/normalized_observation.json",
+                    prov["source_files"]["normalized"],
+                )
+                self.assertEqual(
+                    prov["processing_status"], "extraction_complete"
+                )
+                self.assertEqual(prov["workspace_resolution"], "confirmed")
+            finally:
+                os.unlink(reg_path)
+                os.unlink(ws_path)
+
+    def test_strategy_extraction_no_raw_files_fails(self):
+        with tempfile.TemporaryDirectory() as repo_root, \
+                tempfile.TemporaryDirectory() as wd1, \
+                tempfile.TemporaryDirectory() as wd2, \
+                tempfile.TemporaryDirectory() as wd3:
+
+            # DAILY has no observations; should fail.
+            self._make_analysis_tree(wd3, ["2026-03-15"])
+
+            registry = {
+                "registry_version": "1.2",
+                "entries": [
+                    {
+                        "case_id": "case-001-asteroid",
+                        "raw_source_repository": (
+                            "abdelkader-omran/AUTO-DZ-ACT-3I-ATLAS-DAILY"
+                        ),
+                        "normalized_source_repository": (
+                            "abdelkader-omran/AUTO-DZ-ACT-ANALYSIS-3I-ATLAS"
+                        ),
+                        "raw_source_strategy": STRATEGY_LATEST_DAILY_OBSERVATION,
+                        "normalized_source_strategy": (
+                            STRATEGY_LATEST_ANALYSIS_NORMALIZED
+                        ),
+                        "target_case_raw_dir": "cases/case-001-asteroid/raw",
+                        "target_case_normalized_dir": (
+                            "cases/case-001-asteroid/normalized"
+                        ),
+                        "extraction_status": "approved",
+                        "governance_reference": "bridge_rules.md",
+                    }
+                ],
+            }
+            reg_path = _write_json(registry)
+            ws_path = self._setup_workspace(wd1, wd2, wd3)
+            try:
+                with self.assertRaises(RuntimeError):
+                    run_extraction(
+                        case_id="case-001-asteroid",
+                        registry_path=reg_path,
+                        workspace_path=ws_path,
+                        repo_root=repo_root,
+                        logger=self.logger,
+                    )
             finally:
                 os.unlink(reg_path)
                 os.unlink(ws_path)
