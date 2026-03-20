@@ -8,10 +8,10 @@
       "raw_source_repository": "abdelkader-omran/AUTO-DZ-ACT-3I-ATLAS-DAILY",
       "normalized_source_repository": "abdelkader-omran/AUTO-DZ-ACT-ANALYSIS-3I-ATLAS",
       "allowed_raw_source_paths": [
-        "PLACEHOLDER: repository-visible source paths from AUTO-DZ-ACT-3I-ATLAS-DAILY not yet confirmed. Update this entry once file paths are confirmed as repository-visible."
+        "observations/2026-03-21/observation.json"
       ],
       "allowed_normalized_source_paths": [
-        "PLACEHOLDER: repository-visible source paths from AUTO-DZ-ACT-ANALYSIS-3I-ATLAS not yet confirmed. Update this entry once file paths are confirmed as repository-visible."
+        "public/observations/2026-03-21.json"
       ],
       "allowed_transformations": [],
       "target_case_raw_dir": "validation/cases/case-001-asteroid/raw",
