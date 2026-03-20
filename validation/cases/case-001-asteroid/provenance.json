@@ -3,13 +3,14 @@
   "organization": "trizel-ai",
   "epistemic_layer": "Layer-1",
   "case_id": "case-001-asteroid",
-  "source_type": "observational_data",
-  "data_origin": "TBD",
+  "source_type": "small_body_observational_pipeline_output",
+  "data_origin": "PENDING: source extraction from AUTO-DZ-ACT-ANALYSIS-3I-ATLAS not yet completed. Source repository not accessible from current repository-visible context. Population must not proceed with uncertain or external data.",
   "processing": [
     "raw_ingestion",
     "normalization",
     "artifact_structuring"
   ],
+  "processing_status": "pending",
   "governance_reference": "trizel-core",
-  "note": "Full source attribution will be added during data population"
+  "note": "This provenance record will be updated once real data is extracted from the AUTO-DZ-ACT-ANALYSIS-3I-ATLAS pipeline. No placeholder or synthetic data has been introduced."
 }
