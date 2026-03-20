@@ -900,6 +900,74 @@ def _write_provenance(
 
 
 # ---------------------------------------------------------------------------
+# Manifest update helper
+# ---------------------------------------------------------------------------
+
+def update_case_manifest(
+    entry: dict[str, Any],
+    raw_records: list[dict[str, str]],
+    normalized_records: list[dict[str, str]],
+    repo_root: str,
+    logger: logging.Logger,
+) -> None:
+    """Update the case manifest.json to reflect a completed extraction.
+
+    After successful dual-source extraction the manifest must no longer
+    claim a pre-extraction state.  This function:
+
+    - Sets ``status`` to ``"extraction_complete"``.
+    - Replaces the generic ``files`` list with the actual destination paths
+      discovered from *raw_records* and *normalized_records* plus the
+      standard case metadata files.
+    - Removes any pre-extraction ``note`` that described the pending state.
+
+    Raises
+    ------
+    RuntimeError
+        If the manifest file cannot be written.
+    """
+    case_id = entry["case_id"]
+    raw_dir_rel = entry["target_case_raw_dir"]
+    case_dir = os.path.dirname(os.path.join(repo_root, raw_dir_rel))
+    manifest_path = os.path.join(case_dir, "manifest.json")
+
+    if os.path.isfile(manifest_path):
+        with open(manifest_path, encoding="utf-8") as fh:
+            manifest: dict[str, Any] = json.load(fh)
+    else:
+        manifest = {"case_id": case_id, "hash_algorithm": "sha256"}
+
+    # Build the file inventory from actual copy records.
+    file_list: list[str] = []
+    for rec in raw_records:
+        file_list.append(rec["destination_path"])
+    for rec in normalized_records:
+        file_list.append(rec["destination_path"])
+
+    # Always include standard case metadata files if they exist.
+    for meta_file in ("provenance.json", "artifact.json", "epistemic_state.json"):
+        meta_path = os.path.join(case_dir, meta_file)
+        if os.path.isfile(meta_path):
+            file_list.append(meta_file)
+
+    manifest["files"] = file_list
+    manifest["status"] = "extraction_complete"
+    # Remove any note left over from the pending state.
+    manifest.pop("note", None)
+
+    try:
+        with open(manifest_path, "w", encoding="utf-8") as fh:
+            json.dump(manifest, fh, indent=2)
+            fh.write("\n")
+    except OSError as exc:
+        raise RuntimeError(
+            f"Case '{case_id}': failed to write manifest to '{manifest_path}': {exc}"
+        ) from exc
+
+    logger.info("Manifest updated: %s", manifest_path)
+
+
+# ---------------------------------------------------------------------------
 # Audit log helper
 # ---------------------------------------------------------------------------
 
@@ -1006,6 +1074,11 @@ def run_extraction(
         # 6. Update provenance with dual-source lineage.
         update_dual_source_provenance(
             entry, raw_records, normalized_records, registry_version, repo_root, logger
+        )
+
+        # 7. Update manifest to reflect the completed extraction.
+        update_case_manifest(
+            entry, raw_records, normalized_records, repo_root, logger
         )
 
         timestamp = datetime.now(timezone.utc).isoformat()
