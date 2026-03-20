@@ -1,5 +1,5 @@
 {
-  "registry_version": "1.1",
+  "registry_version": "1.2",
   "description": "Controlled source-to-case mapping for the TRIZEL validation bridge. Every extraction must be declared here before it can proceed. Dual-source entries declare explicit raw and normalized source repositories.",
   "entries": [
     {
@@ -7,12 +7,8 @@
       "phenomenon_class": "small_body_asteroid",
       "raw_source_repository": "abdelkader-omran/AUTO-DZ-ACT-3I-ATLAS-DAILY",
       "normalized_source_repository": "abdelkader-omran/AUTO-DZ-ACT-ANALYSIS-3I-ATLAS",
-      "allowed_raw_source_paths": [
-        "observations/2026-03-20/observation.json"
-      ],
-      "allowed_normalized_source_paths": [
-        "public/observations/2026-03-20/normalized_observation.json"
-      ],
+      "raw_source_strategy": "latest_daily_observation",
+      "normalized_source_strategy": "latest_analysis_normalized_observation",
       "allowed_transformations": [],
       "target_case_raw_dir": "validation/cases/case-001-asteroid/raw",
       "target_case_normalized_dir": "validation/cases/case-001-asteroid/normalized",

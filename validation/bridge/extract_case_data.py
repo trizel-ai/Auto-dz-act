@@ -21,9 +21,35 @@ All extraction is governed by bridge_rules.md and registry.json.
 - Updates (or prepares) the case provenance.json with full source traceability.
 - Fails safely if any required condition is not met.
 
+Source resolution modes
+-----------------------
+Explicit paths:
+    Registry entries with ``allowed_raw_source_paths`` /
+    ``allowed_normalized_source_paths`` use fixed repository-relative paths.
+    This mode remains fully supported for backward compatibility.
+
+Strategy mode (controlled discovery):
+    Registry entries with ``raw_source_strategy`` /
+    ``normalized_source_strategy`` use deterministic latest-date discovery
+    restricted to the modern structured operational window
+    (post-2026-03-15 date-based directories).  Supported strategies:
+
+    ``latest_daily_observation``
+        Discovers the newest ``observations/YYYY-MM-DD/observation.json``
+        inside the DAILY repository root.
+
+    ``latest_analysis_normalized_observation``
+        Discovers the newest
+        ``public/observations/YYYY-MM-DD/normalized_observation.json``
+        inside the ANALYSIS repository root.
+
+    Strategy resolution is deterministic (latest ISO date wins), auditable,
+    and limited to date-named directories only.  The actual discovered path
+    is recorded in provenance exactly as explicit-path mode would.
+
 No network requests are made.
 No files are placed without a corresponding provenance record.
-Auto-discovery of source files is forbidden.
+Unrestricted filesystem search is forbidden.
 """
 
 import argparse
@@ -50,6 +76,10 @@ TRIZEL_REPOSITORY = "trizel-ai/Auto-dz-act"
 
 _PLACEHOLDER_PREFIX = "PLACEHOLDER"
 _STATUS_CONFIRMED = "confirmed"
+
+# Strategy identifiers for controlled latest-date discovery.
+STRATEGY_LATEST_DAILY_OBSERVATION = "latest_daily_observation"
+STRATEGY_LATEST_ANALYSIS_NORMALIZED = "latest_analysis_normalized_observation"
 
 
 # ---------------------------------------------------------------------------
@@ -302,6 +332,20 @@ def validate_dual_source_entry(
 ) -> tuple[list[str], list[str]]:
     """Validate a dual-source registry entry.
 
+    Supports two source resolution modes:
+
+    **Strategy mode** (controlled latest-date discovery):
+        If ``raw_source_strategy`` is declared in *entry*, the raw path is
+        resolved via :func:`resolve_source_strategy` against *raw_root*.
+        Likewise ``normalized_source_strategy`` resolves the normalized path
+        against *normalized_root*.  The discovered paths are auditable and
+        deterministic.
+
+    **Explicit-path mode** (backward compatible):
+        If no strategy fields are present, ``allowed_raw_source_paths`` and
+        ``allowed_normalized_source_paths`` are validated against their
+        respective repository roots exactly as before.
+
     Parameters
     ----------
     raw_root:
@@ -323,20 +367,52 @@ def validate_dual_source_entry(
     validate_entry_status(entry)
     case_id = entry.get("case_id", "<unknown>")
 
-    raw_paths = _validate_source_paths(
-        case_id,
-        entry.get("allowed_raw_source_paths", []),
-        "raw",
-        raw_root,
-        logger,
-    )
-    normalized_paths = _validate_source_paths(
-        case_id,
-        entry.get("allowed_normalized_source_paths", []),
-        "normalized",
-        normalized_root,
-        logger,
-    )
+    # --- raw source ---
+    raw_strategy = entry.get("raw_source_strategy")
+    if raw_strategy:
+        logger.info(
+            "Case '%s': resolving raw source via strategy '%s'",
+            case_id,
+            raw_strategy,
+        )
+        raw_paths = [resolve_source_strategy(raw_strategy, raw_root, logger)]
+        logger.info(
+            "Case '%s': raw strategy resolved to '%s'", case_id, raw_paths[0]
+        )
+    else:
+        raw_paths = _validate_source_paths(
+            case_id,
+            entry.get("allowed_raw_source_paths", []),
+            "raw",
+            raw_root,
+            logger,
+        )
+
+    # --- normalized source ---
+    normalized_strategy = entry.get("normalized_source_strategy")
+    if normalized_strategy:
+        logger.info(
+            "Case '%s': resolving normalized source via strategy '%s'",
+            case_id,
+            normalized_strategy,
+        )
+        normalized_paths = [
+            resolve_source_strategy(normalized_strategy, normalized_root, logger)
+        ]
+        logger.info(
+            "Case '%s': normalized strategy resolved to '%s'",
+            case_id,
+            normalized_paths[0],
+        )
+    else:
+        normalized_paths = _validate_source_paths(
+            case_id,
+            entry.get("allowed_normalized_source_paths", []),
+            "normalized",
+            normalized_root,
+            logger,
+        )
+
     return raw_paths, normalized_paths
 
 
@@ -357,6 +433,156 @@ def validate_entry(
     case_id = entry.get("case_id", "<unknown>")
     allowed_paths = entry.get("allowed_source_paths", [])
     return _validate_source_paths(case_id, allowed_paths, "raw", repo_root, logger)
+
+
+# ---------------------------------------------------------------------------
+# Controlled latest-date discovery helpers
+# ---------------------------------------------------------------------------
+
+_ISO_DATE_DIR_LENGTH = 10  # length of "YYYY-MM-DD"
+
+
+def _is_iso_date_dir(name: str) -> bool:
+    """Return True if *name* is a valid ISO 8601 date string (YYYY-MM-DD).
+
+    Only directories whose names match the YYYY-MM-DD pattern and represent
+    a real calendar date are considered.  This restricts discovery to the
+    modern structured operational window.
+    """
+    if len(name) != _ISO_DATE_DIR_LENGTH:
+        return False
+    try:
+        datetime.strptime(name, "%Y-%m-%d")
+        return True
+    except ValueError:
+        return False
+
+
+def _find_latest_matching_file(
+    base_dir: str, subdir: str, filename: str
+) -> str | None:
+    """Search *base_dir*/*subdir*/YYYY-MM-DD/*filename* for the latest ISO date.
+
+    Parameters
+    ----------
+    base_dir:
+        Absolute root of the source repository checkout.
+    subdir:
+        Repository-relative parent directory to scan (e.g. ``"observations"``
+        or ``"public/observations"``).
+    filename:
+        Exact filename to look for inside each date directory.
+
+    Returns
+    -------
+    str | None
+        Repository-relative path ``subdir/YYYY-MM-DD/filename`` for the
+        latest valid date, or ``None`` if no valid file is found.
+
+    Rules
+    -----
+    - Only directories matching YYYY-MM-DD are considered.
+    - The latest valid date wins (deterministic lexicographic sort).
+    - No heuristic guessing; no random selection.
+    """
+    parent = os.path.join(base_dir, subdir)
+    if not os.path.isdir(parent):
+        return None
+
+    candidates: list[str] = []
+    try:
+        entries = os.scandir(parent)
+    except OSError:
+        return None
+
+    with entries:
+        for entry in entries:
+            if entry.is_dir() and _is_iso_date_dir(entry.name):
+                candidate = os.path.join(entry.path, filename)
+                if os.path.isfile(candidate):
+                    candidates.append(entry.name)
+
+    if not candidates:
+        return None
+
+    # YYYY-MM-DD strings sort lexicographically in chronological order, so
+    # sorted()[-1] gives the latest date deterministically.
+    latest = sorted(candidates)[-1]
+    return f"{subdir}/{latest}/{filename}"
+
+
+def resolve_source_strategy(
+    strategy: str, repo_root: str, logger: logging.Logger
+) -> str:
+    """Resolve a named source strategy to a repository-relative file path.
+
+    Supported strategies
+    --------------------
+    ``latest_daily_observation``
+        Returns the newest ``observations/YYYY-MM-DD/observation.json``
+        found under *repo_root*.  Intended for the DAILY repository.
+
+    ``latest_analysis_normalized_observation``
+        Returns the newest
+        ``public/observations/YYYY-MM-DD/normalized_observation.json``
+        found under *repo_root*.  Intended for the ANALYSIS repository.
+
+    Parameters
+    ----------
+    strategy:
+        One of the ``STRATEGY_*`` constants declared in this module.
+    repo_root:
+        Absolute local path to the relevant repository checkout.
+    logger:
+        Active logger for audit output.
+
+    Returns
+    -------
+    str
+        Repository-relative path to the discovered file.
+
+    Raises
+    ------
+    RuntimeError
+        If no valid date directory containing the target file is found.
+    ValueError
+        If *strategy* is not a recognised strategy name.
+    """
+    if strategy == STRATEGY_LATEST_DAILY_OBSERVATION:
+        rel_path = _find_latest_matching_file(
+            repo_root, "observations", "observation.json"
+        )
+        if rel_path is None:
+            raise RuntimeError(
+                f"Strategy '{strategy}': no valid "
+                "observations/YYYY-MM-DD/observation.json "
+                f"found under '{repo_root}'."
+            )
+        logger.info(
+            "Strategy '%s': discovered latest path '%s'", strategy, rel_path
+        )
+        return rel_path
+
+    if strategy == STRATEGY_LATEST_ANALYSIS_NORMALIZED:
+        rel_path = _find_latest_matching_file(
+            repo_root, "public/observations", "normalized_observation.json"
+        )
+        if rel_path is None:
+            raise RuntimeError(
+                f"Strategy '{strategy}': no valid "
+                "public/observations/YYYY-MM-DD/normalized_observation.json "
+                f"found under '{repo_root}'."
+            )
+        logger.info(
+            "Strategy '%s': discovered latest path '%s'", strategy, rel_path
+        )
+        return rel_path
+
+    raise ValueError(
+        f"Unknown source strategy: '{strategy}'. "
+        f"Supported strategies: {STRATEGY_LATEST_DAILY_OBSERVATION!r}, "
+        f"{STRATEGY_LATEST_ANALYSIS_NORMALIZED!r}."
+    )
 
 
 # ---------------------------------------------------------------------------
