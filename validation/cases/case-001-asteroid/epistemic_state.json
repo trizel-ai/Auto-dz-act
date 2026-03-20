@@ -1,7 +1,7 @@
 {
   "case_id": "case-001-asteroid",
-  "state": "source_extraction_pending",
+  "state": "pending_workspace_resolution",
   "interpretation": false,
   "validated": false,
-  "notes": "Data population has not yet occurred. Source repository (AUTO-DZ-ACT-ANALYSIS-3I-ATLAS) is not accessible from current repository-visible context. No synthetic or placeholder data has been introduced. This record will be updated once real source data is safely available."
+  "notes": "Dual-source bridge extraction configured. Raw data will come from AUTO-DZ-ACT-3I-ATLAS-DAILY; normalized data from AUTO-DZ-ACT-ANALYSIS-3I-ATLAS. Extraction is blocked until workspace is fully resolved (bootstrap_workspace.py + resolve_workspace_paths.py). No synthetic or placeholder data has been introduced. State will advance to 'extracted_raw_and_normalized' only after successful extraction."
 }

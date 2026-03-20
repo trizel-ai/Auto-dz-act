@@ -2,9 +2,9 @@
   "artifact_id": "artifact-case-001",
   "case_id": "case-001-asteroid",
   "type": "structured_epistemic_output",
-  "repository": "Auto-dz-act",
-  "epistemic_layer": "Layer-1",
-  "status": "source_extraction_pending",
-  "description": "Structured output to be derived from normalized asteroid observational data produced by AUTO-DZ-ACT-ANALYSIS-3I-ATLAS pipeline. Population blocked until source data is accessible and safely extractable.",
+  "repository": "trizel-ai/Auto-dz-act",
+  "epistemic_layer": "validation",
+  "status": "pending_workspace_resolution",
+  "description": "Structured output to be derived from asteroid observational data via dual-source bridge extraction. Raw data sourced exclusively from AUTO-DZ-ACT-3I-ATLAS-DAILY; normalized data sourced exclusively from AUTO-DZ-ACT-ANALYSIS-3I-ATLAS. Population blocked until workspace is resolved and source paths are confirmed.",
   "provenance_required": true
 }

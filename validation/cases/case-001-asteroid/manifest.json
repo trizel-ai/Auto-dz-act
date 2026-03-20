@@ -8,6 +8,6 @@
     "epistemic_state.json"
   ],
   "hash_algorithm": "sha256",
-  "status": "source_extraction_pending",
-  "note": "Data population blocked: source repository (AUTO-DZ-ACT-ANALYSIS-3I-ATLAS) not accessible from current repository-visible context. Hashes will be added after real data is extracted and placed."
+  "status": "pending_workspace_resolution",
+  "note": "Dual-source extraction configured: raw/ from AUTO-DZ-ACT-3I-ATLAS-DAILY, normalized/ from AUTO-DZ-ACT-ANALYSIS-3I-ATLAS. File hashes and full inventory will be added after workspace is resolved and real data is extracted via bridge."
 }

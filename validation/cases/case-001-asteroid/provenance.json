@@ -1,16 +1,18 @@
 {
-  "repository": "Auto-dz-act",
+  "repository": "trizel-ai/Auto-dz-act",
   "organization": "trizel-ai",
-  "epistemic_layer": "Layer-1",
+  "epistemic_layer": "validation",
   "case_id": "case-001-asteroid",
   "source_type": "small_body_observational_pipeline_output",
-  "data_origin": "PENDING: source extraction from AUTO-DZ-ACT-ANALYSIS-3I-ATLAS not yet completed. Source repository not accessible from current repository-visible context. Population must not proceed with uncertain or external data.",
-  "processing": [
-    "raw_ingestion",
-    "normalization",
-    "artifact_structuring"
-  ],
-  "processing_status": "pending",
-  "governance_reference": "trizel-core",
-  "note": "This provenance record will be updated once real data is extracted from the AUTO-DZ-ACT-ANALYSIS-3I-ATLAS pipeline. No placeholder or synthetic data has been introduced."
+  "raw_source_repository": "abdelkader-omran/AUTO-DZ-ACT-3I-ATLAS-DAILY",
+  "normalized_source_repository": "abdelkader-omran/AUTO-DZ-ACT-ANALYSIS-3I-ATLAS",
+  "source_files": {
+    "raw": [],
+    "normalized": []
+  },
+  "extraction_method": "bridge_controlled_copy",
+  "extraction_timestamp": null,
+  "workspace_resolution": "pending",
+  "processing_status": "pending_workspace_resolution",
+  "governance_reference": "validation/bridge/bridge_rules.md"
 }
